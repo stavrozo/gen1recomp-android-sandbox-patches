@@ -16,7 +16,7 @@
     "name": "wilds-of-kanto",
     "source_sha256": "376d69cb7272a6fac104b74495206f5b680b0e50295b890c828ddc52cb204cba",
     "output_name": "Wilds.of.Kanto.v2.1.1-sandbox.2.android.patch.zip",
-    "patch_file": "patches/wilds-of-kanto/android-sandbox.patch",
+    "patch_file": "patches/wilds-of-kanto/android-sandbox.patch.gz",
     "changed_files": [
       {"path": "overworld-spawn-mod-main/CHANGELOG.md", "trailing_newline": true, "sha256": "d02d3ce1ef6ee2047a1532fb7313c3f3f06b5036a0895b2cf61d3ca700c249f5"},
       {"path": "overworld-spawn-mod-main/lib/animated_sprites.lua", "trailing_newline": true, "sha256": "090217cd3b3c82c0e113eeebb03e8be152889750d45bd3da06882670efde6a48"},
@@ -51,7 +51,7 @@
     "name": "gen1online-gamecorner",
     "source_sha256": "e28cd8d1cd48b74ca177cf456605e84e689fe719d28744d44639d32ed98a96ba",
     "output_name": "Gen1Online-GameCorner-v0.3.4.3-sandbox.1-android-patch.zip",
-    "patch_file": "patches/gen1online-gamecorner/android-sandbox.patch",
+    "patch_file": "patches/gen1online-gamecorner/android-sandbox.patch.gz",
     "changed_files": [
       {"path": "games/blackjack/view.lua", "trailing_newline": true, "sha256": "1055a3632a9805eff940685c2a43f609ed39352483e1726ecae71e3f7a57de42"},
       {"path": "main.lua", "trailing_newline": false, "sha256": "0f3c34f8f742ec9577f6be66d8cf6d7ee81d3070fd45d47c52cab4287f16d05f"},
