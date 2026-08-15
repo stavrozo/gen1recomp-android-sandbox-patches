@@ -60,20 +60,18 @@ This repo uses a conservative hybrid model:
 
 Users should download the exact supported original mod version from its original author/source, then apply the local compatibility patch.
 
-See [`docs/superpowers/specs/2026-08-15-gen1recomp-android-sandbox-patches-design.md`](docs/superpowers/specs/2026-08-15-gen1recomp-android-sandbox-patches-design.md) for the full project design and licensing rules.
-
 ## Safety rules
 
 - No ROMs or baseroms.
 - No extracted Pokémon game assets.
 - No save-file modification is required.
-- The patcher will operate on a copy of the original mod ZIP and leave the user's source download untouched.
+- Patch tools will operate on a copy of the original mod ZIP and leave the user's source download untouched.
 - Unknown mod versions will be rejected rather than patched blindly.
 - Static checks are not treated as proof of Android runtime compatibility; device testing is documented separately.
 
 ## Project status
 
-🚧 **Work in progress.** The repository structure and licensing model are now defined. Patch files, patcher scripts, tests, and release packaging are being added next.
+🚧 **Work in progress.** Patch files, patcher scripts, tests, attribution notes, and release packaging are being added next.
 
 ## Credits
 
