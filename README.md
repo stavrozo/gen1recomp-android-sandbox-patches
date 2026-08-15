@@ -10,12 +10,14 @@ Unofficial compatibility fixes for Gen1Recomp mods affected by newer Android san
 | Mod | Original | Android status | Fix |
 |---|---:|---|---|
 | [Crystal Animated Sprites](patches/crystal-animated-sprites/) | 1.6 | ✅ Verified | [patch](patches/crystal-animated-sprites/android-sandbox.patch) |
-| [Wilds of Kanto](patches/wilds-of-kanto/) | 2.1.0 | ✅ Verified | [patch](patches/wilds-of-kanto/android-sandbox.patch) |
-| [Shiny Pokémon](patches/shiny-pokemon/) | 1.0.1 | ✅ Verified | [patch](patches/shiny-pokemon/android-sandbox.patch) + ready build |
-| [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | ⚠️ Sandbox load fixed; live online behavior experimental | [patch](patches/gen1online-gamecorner/android-sandbox.patch) |
+| [Wilds of Kanto](patches/wilds-of-kanto/) | 2.1.0 | ✅ Verified | [exact compressed patch](patches/wilds-of-kanto/android-sandbox.patch.gz) |
+| [Shiny Pokémon](patches/shiny-pokemon/) | 1.0.1 | ✅ Verified | [patch](patches/shiny-pokemon/android-sandbox.patch) |
+| [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | ⚠️ Sandbox load fixed; live online behavior experimental | [exact compressed patch](patches/gen1online-gamecorner/android-sandbox.patch.gz) |
 | [Dramaless Shape](patches/dramaless-shape/) | 2.0.1 | ✅ Verified | [patch](patches/dramaless-shape/android-sandbox.patch) |
 
-## Easiest way to use the patch-only fixes
+The larger Wilds and Gen1Online diffs are stored as `.patch.gz` only to keep the repository compact. The patcher reads them directly; users do not need to decompress them.
+
+## Easiest way to use the fixes
 
 You need **Python 3.10+**. Download/clone this repository, then run:
 
@@ -63,11 +65,11 @@ This fixes the Voxel-mode bug where followers, wild Pokémon, and trainers could
 
 The root cause was a unit mismatch in render-distance culling: NPC/follower positions were in **world pixels**, while the player was compared using **grid cells**. The patch uses the player's pixel coordinates (with a 16-pixel cell fallback). It also removes the `baseroms/` placeholder folder because the current Android importer rejects packages containing that path.
 
-## Why most full mod ZIPs are not hosted here
+## Why full mod ZIPs are not hosted here
 
 We researched the upstream licensing before publishing anything:
 
-- **Shiny Pokémon:** upstream MIT license permits redistribution with attribution, so a ready-to-install compatibility build can be provided.
+- **Shiny Pokémon:** upstream MIT license permits redistribution with attribution. The patch is published here; a prebuilt package can also be released later while preserving the upstream license.
 - **Crystal Animated Sprites:** no clear upstream license was found, so only the compatibility diff/tooling is published here.
 - **Wilds of Kanto:** source code is MIT, but its package includes separately attributed/licensed third-party artwork, so the complete mod is not repacked here.
 - **Gen1Online / Game Corner:** licensing of the complete current package is unclear, so only the patch is published.
