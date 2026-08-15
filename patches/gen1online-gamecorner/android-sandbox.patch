@@ -1,0 +1,448 @@
+--- a/games/blackjack/view.lua
++++ b/games/blackjack/view.lua
+@@ -2,6 +2,11 @@
+ -- Everything is drawn from primitives so the mod stays self-contained.
+ 
+ local View = {}
++local modApi = nil
++
++function View.setMod(mod)
++  modApi = mod
++end
+ 
+ local C = {
+@@ -172,47 +177,15 @@
+     return CARD_IMAGES[key]
+   end
+ 
+-  local candidates = {
+-    "assets/cards/" .. s .. "/cards_" .. s .. "_" .. r .. ".png",
+-    "mods/gen1online-gamecorner/assets/cards/" .. s .. "/cards_" .. s .. "_" .. r .. ".png",
+-    "mods/gen1online/assets/cards/" .. s .. "/cards_" .. s .. "_" .. r .. ".png",
+-    "mods/Gen1Online-main/assets/cards/" .. s .. "/cards_" .. s .. "_" .. r .. ".png",
+-    "mods/gen1recomp-blackjack-corner-main/assets/cards/" .. s .. "/cards_" .. s .. "_" .. r .. ".png",
+-  }
+-
+-  -- 1. Try io.open raw bytes + newFileData (works across all OS working directories)
+-  if io and io.open and love and love.filesystem and love.filesystem.newFileData and love.graphics and love.graphics.newImage then
+-    for _, path in ipairs(candidates) do
+-      local f = io.open(path, "rb")
+-      if f then
+-        local data = f:read("*a")
+-        f:close()
+-        if data and #data > 0 then
+-          local ok1, fileData = pcall(love.filesystem.newFileData, data, "card.png")
+-          if ok1 and fileData then
+-            local ok2, img = pcall(love.graphics.newImage, fileData)
+-            if ok2 and img then
+-              img:setFilter("nearest", "nearest")
+-              CARD_IMAGES[key] = img
+-              return img
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  -- 2. Try love.filesystem.getInfo + newImage
+-  if love and love.filesystem and love.graphics and love.graphics.newImage then
+-    for _, path in ipairs(candidates) do
+-      if love.filesystem.getInfo and love.filesystem.getInfo(path) then
+-        local ok, img = pcall(love.graphics.newImage, path)
+-        if ok and img then
+-          img:setFilter("nearest", "nearest")
+-          CARD_IMAGES[key] = img
+-          return img
+-        end
+-      end
++  -- Sandbox-safe asset access. Card art ships inside this mod, so ask the
++  -- loader for the image instead of probing raw filesystem paths.
++  if modApi and modApi.assets and modApi.assets.image then
++    local relative = "assets/cards/" .. s .. "/cards_" .. s .. "_" .. r .. ".png"
++    local ok, img = pcall(function() return modApi.assets:image(relative) end)
++    if ok and img then
++      img:setFilter("nearest", "nearest")
++      CARD_IMAGES[key] = img
++      return img
+     end
+   end
+ 
+--- a/main.lua
++++ b/main.lua
+@@ -137,126 +137,134 @@
+   }
+   local gtsDb = _G.GEN1ONLINE_GTS
+ 
+-  -- TRUE ASYNCHRONOUS BACKGROUND THREADING ENGINE (love.thread)
+-  -- Pos-sync channel: flush-all, keep newest (stale positions discarded)
+-  local netOutChannel    = _G.love and _G.love.thread and _G.love.thread.getChannel("gen1mmo_out")
+-  local netInChannel     = _G.love and _G.love.thread and _G.love.thread.getChannel("gen1mmo_in")
+-  -- Battle channel: FIFO, every message delivered (moves cannot be dropped)
+-  local battleOutChannel = _G.love and _G.love.thread and _G.love.thread.getChannel("gen1mmo_battle_out")
+-  local battleInChannel  = _G.love and _G.love.thread and _G.love.thread.getChannel("gen1mmo_battle_in")
+-  -- Debug channel for thread errors
+-  local debugChannel    = _G.love and _G.love.thread and _G.love.thread.getChannel("gen1mmo_debug")
+-  local bgThread = nil
+-
+-  -- Capture package paths for the thread
+-  local threadPackagePath = package.path
+-  local threadPackageCpath = package.cpath
+-  -- Escape backslashes to avoid invalid escape sequences in the thread code string literal
+-  local escapedPath = string.gsub(threadPackagePath, "\\", "\\\\")
+-  local escapedCpath = string.gsub(threadPackageCpath, "\\", "\\\\")
++  -- Android sandbox compatibility: cooperative network queues.
++  -- The current Android mod sandbox does not expose the LÖVE worker-thread
++  -- module to mods, so keep the original channel semantics in Lua and pump
++  -- at most one HTTP request per game update. Battle sends remain FIFO,
++  -- battle polls keep only the newest request, and position sync keeps only
++  -- the newest request.
++  local MOD_VERSION = "0.3.4.3"
++
++  local function newLocalChannel()
++    local queue = {}
++    return {
++      push = function(_, value)
++        queue[#queue + 1] = value
++        return true
++      end,
++      pop = function(_)
++        if #queue == 0 then return nil end
++        return table.remove(queue, 1)
++      end,
++    }
++  end
++
++  local netOutChannel    = newLocalChannel()
++  local netInChannel     = newLocalChannel()
++  local battleOutChannel = newLocalChannel()
++  local battleInChannel  = newLocalChannel()
++  local debugChannel     = newLocalChannel()
++
++  local battleSendBacklog = {}
++  local battleNewestPoll = nil
++  local positionPending = nil
++  local networkPumpBusy = false
+ 
+   -- Remote NPC count logging timer
+   local remoteCountLogTime = 0
+ 
+-  local threadCode = [[
+-    -- Inject main thread's package paths (backslashes escaped)
+-    package.path = "]] .. escapedPath .. [["
+-    package.cpath = "]] .. escapedCpath .. [["
+-
+-    require("love.timer")
+-    local http   = pcall(require, "socket.http") and require("socket.http") or nil
+-    local https  = pcall(require, "ssl.https")   and require("ssl.https")   or nil
+-    local ltn12  = pcall(require, "ltn12")        and require("ltn12")        or nil
+-    local socket = pcall(require, "socket")       and require("socket")       or nil
+-
+-    local outChan       = love.thread.getChannel("gen1mmo_out")
+-    local inChan        = love.thread.getChannel("gen1mmo_in")
+-    local battleOutChan = love.thread.getChannel("gen1mmo_battle_out")
+-    local battleInChan  = love.thread.getChannel("gen1mmo_battle_in")
+-    local debugChan     = love.thread.getChannel("gen1mmo_debug")
+-
+-    local function doPost(url, body)
+-      local resp_body = {}
+-      local fn = (url:sub(1,5)=="https" and https) and https.request or (http and http.request)
+-      if fn and ltn12 then
+-        local ok, err = pcall(fn, {
+-          url = url, method = "POST",
+-          headers = { ["Content-Type"]="application/json",
+-                      ["Content-Length"]=tostring(#body),
+-                      ["X-Mod-Version"]="0.3.4.3" },
+-          source = ltn12.source.string(body),
+-          sink   = ltn12.sink.table(resp_body),
+-          timeout = 3.5
+-        })
+-        if not ok then
+-          debugChan:push("HTTP POST error: " .. tostring(err))
+-          return ""
+-        end
++  local function queuedPost(req, timeout)
++    if not req or not req.url or not req.body or not ltn12 then return "" end
++    local responseBody = {}
++    local requestFn = (req.url:sub(1, 5) == "https" and https) and https.request or (http and http.request)
++    if not requestFn then
++      debugChannel:push("HTTP libraries are unavailable")
++      return ""
++    end
++
++    local ok, _, code = pcall(requestFn, {
++      url = req.url,
++      method = "POST",
++      headers = {
++        ["Content-Type"] = "application/json",
++        ["Content-Length"] = tostring(#req.body),
++        ["X-Mod-Version"] = MOD_VERSION,
++      },
++      source = ltn12.source.string(req.body),
++      sink = ltn12.sink.table(responseBody),
++      timeout = req.timeout or timeout or 0.35,
++    })
++    if not ok then
++      debugChannel:push("HTTP POST failed")
++      return ""
++    end
++    if code and tonumber(code) and tonumber(code) >= 400 then
++      debugChannel:push("HTTP POST returned " .. tostring(code))
++    end
++    return table.concat(responseBody)
++  end
++
++  local function collectQueuedRequests()
++    local req = battleOutChannel:pop()
++    while req do
++      if req.keepNewest then
++        battleNewestPoll = req
+       else
+-        debugChan:push("HTTP libraries not loaded (http=" .. tostring(http) .. ", https=" .. tostring(https) .. ", ltn12=" .. tostring(ltn12) .. ")")
+-        return ""
+-      end
+-      return table.concat(resp_body)
+-    end
+-
+-    while true do
+-      -- 1. BATTLE channel:
+-      --    send_battle_msg: FIFO — every send must be delivered
+-      --    poll_battle_msgs: keep-newest — old polls are stale, discard them
+-      local fifoSends = {}
+-      local newestPoll = nil
+-      local bReq = battleOutChan:pop()
+-      while bReq do
+-        if bReq.keepNewest then
+-          newestPoll = bReq
+-        else
+-          table.insert(fifoSends, bReq)
+-        end
+-        bReq = battleOutChan:pop()
+-      end
+-      for _, req in ipairs(fifoSends) do
+-        local resp = doPost(req.url, req.body)
+-        if #resp > 0 then battleInChan:push(resp) end
+-      end
+-      if newestPoll then
+-        local resp = doPost(newestPoll.url, newestPoll.body)
+-        if #resp > 0 then battleInChan:push(resp) end
+-      end
+-
+-      local req = nil
+-      local nxt = outChan:pop()
+-      while nxt do req = nxt; nxt = outChan:pop() end
+-      if req then
+-        local resp = doPost(req.url, req.body)
+-        if #resp > 0 then inChan:push(resp) end
++        battleSendBacklog[#battleSendBacklog + 1] = req
+       end
+-
+-      if socket and socket.sleep then
+-        socket.sleep(0.008)
+-      elseif love and love.timer and love.timer.sleep then
+-        love.timer.sleep(0.008)
+-      end
+-    end
+-  ]]
+-
+-  if _G.love and _G.love.thread then
+-    pcall(function()
+-      bgThread = _G.love.thread.newThread(threadCode)
+-      bgThread:start()
++      req = battleOutChannel:pop()
++    end
++
++    local newest = netOutChannel:pop()
++    while newest do
++      positionPending = newest
++      newest = netOutChannel:pop()
++    end
++  end
++
++  local function pumpNetworkQueues(mode)
++    if networkPumpBusy then return end
++    networkPumpBusy = true
++    local ok, err = pcall(function()
++      collectQueuedRequests()
++      if #battleSendBacklog > 0 then
++        local req = table.remove(battleSendBacklog, 1)
++        local resp = queuedPost(req, 0.60)
++        if #resp > 0 then battleInChannel:push(resp) end
++        return
++      end
++      if battleNewestPoll then
++        local req = battleNewestPoll
++        battleNewestPoll = nil
++        local resp = queuedPost(req, 0.45)
++        if #resp > 0 then battleInChannel:push(resp) end
++        return
++      end
++      if mode ~= "battle" and positionPending then
++        local req = positionPending
++        positionPending = nil
++        local resp = queuedPost(req, 0.35)
++        if #resp > 0 then netInChannel:push(resp) end
++      end
+     end)
+-  end
+-
+-  local function printThreadDebug()
+-    if debugChannel then
+-      local msg = debugChannel:pop()
+-      while msg do
+-        print("[Thread Debug] " .. tostring(msg))
+-        msg = debugChannel:pop()
+-      end
++    networkPumpBusy = false
++    if not ok then
++      debugChannel:push("Network pump error: " .. tostring(err))
++    end
++  end
++
++  local function printNetworkDebug()
++    local msg = debugChannel:pop()
++    while msg do
++      mod.log:warn("%s", tostring(msg))
++      msg = debugChannel:pop()
+     end
+   end
+@@ -272,8 +280,6 @@
+     end
+     return false, nil, nil, nil, nil
+   end
+-
+-  local MOD_VERSION = "0.3.4.3"
+@@ -455,28 +461,31 @@
+     end
+   end
+ 
++  local function drainBattleResponses(self)
++    local bStr = battleInChannel:pop()
++    while bStr do
++      local ok, bRes = pcall(Json.decode, bStr)
++      if ok and bRes and bRes.msgs then
++        for _, m in ipairs(bRes.msgs) do table.insert(self.inbox, m) end
++      end
++      bStr = battleInChannel:pop()
++    end
++  end
++
+   function GtsNetAdapter:update()
+-    -- background-thread draining and fresh polling
+-    if battleInChannel then
+-      local bStr = battleInChannel:pop()
+-      while bStr do
+-        local ok, bRes = pcall(Json.decode, bStr)
+-        if ok and bRes and bRes.msgs then
+-          for _, m in ipairs(bRes.msgs) do table.insert(self.inbox, m) end
+-        end
+-        bStr = battleInChannel:pop()
+-      end
+-    end
+-
+-    if not self.closed and battleOutChannel then
++    drainBattleResponses(self)
++    local now = (_G.love and _G.love.timer and _G.love.timer.getTime)
++      and _G.love.timer.getTime() or os.clock()
++    if not self.closed and (not self.lastPollAt or now - self.lastPollAt >= 0.20) then
++      self.lastPollAt = now
+       battleOutChannel:push({
+         keepNewest = true,
+         url = GTS_SERVER_URL .. "/gts",
+@@ -487,6 +496,9 @@
+         })
+       })
+     end
++    pumpNetworkQueues("battle")
++    drainBattleResponses(self)
+   end
+@@ -839,9 +851,20 @@
+ 
+   local offlineSaveBackup = nil
+ 
++  local okSaveDataModule, SaveDataModule = pcall(require, "src.core.SaveData")
++  if not okSaveDataModule then SaveDataModule = nil end
++
++  local function persistenceFs()
++    if SaveDataModule and SaveDataModule.persistenceFs then
++      local ok, fs = pcall(SaveDataModule.persistenceFs)
++      if ok then return fs end
++    end
++    return nil
++  end
++
+   loadOnlineSave = function()
+     local SaveSerializer = require("src.core.SaveSerializer")
+-    local fs = love.filesystem
++    local fs = persistenceFs()
+@@ -859,7 +882,7 @@
+   writeOnlineSave = function(saveTable)
+     if not saveTable or type(saveTable) ~= "table" then return false end
+     local SaveSerializer = require("src.core.SaveSerializer")
+-    local fs = love.filesystem
++    local fs = persistenceFs()
+@@ -875,7 +898,6 @@
+   end
+ 
+   -- Global SaveData.save Guard: Intercept all Start Menu and in-game saves while online
+-  local SaveDataModule = pcall(require, "src.core.SaveData") and require("src.core.SaveData") or nil
+@@ -2767,7 +2789,7 @@
+               label = "YES, RESET",
+               onSelect = function()
+-                local fs = love.filesystem
++                local fs = persistenceFs()
+@@ -3218,7 +3240,7 @@
+       local now = (_G.love and _G.love.timer and _G.love.timer.getTime) and _G.love.timer.getTime() or os.time()
+-      if now - lastSendTime >= 0.15 and self.player and self.map and netOutChannel then
++      if now - lastSendTime >= 0.35 and self.player and self.map and netOutChannel then
+@@ -3246,7 +3268,8 @@
+-      -- Read any server responses the background thread has returned
++      -- Pump one queued request and consume any server response.
++      pumpNetworkQueues("overworld")
+       processGlobalThreadMessages(Game)
+@@ -3261,7 +3284,8 @@
+-    -- 2. Process incoming async thread messages
++    -- 2. Pump one queued network request and process its response.
++    pumpNetworkQueues("overworld")
+     processGlobalThreadMessages(Game)
+@@ -3271,7 +3295,7 @@
+-      if positionChanged or (now - lastSendTime >= 0.10) then
++      if positionChanged or (now - lastSendTime >= 0.35) then
+@@ -3519,8 +3543,8 @@
+-    -- Optional: print any debug messages from the thread
+-    printThreadDebug()
++    -- Surface cooperative network diagnostics in the mod log.
++    printNetworkDebug()
+@@ -3538,6 +3562,7 @@
+   local Rules = loadLocal(mod, paths.blackjack .. "rules.lua")
+   local BlackjackView = loadLocal(mod, paths.blackjack .. "view.lua")
++  if BlackjackView.setMod then BlackjackView.setMod(mod) end
+@@ -3630,10 +3655,11 @@
+     local p1 = "save/mod-derived/" .. tostring(mod.id or "gen1online-gamecorner") .. "/" .. subpath
+     local p2 = "save/mod-derived/blackjack_corner/" .. subpath
+     local p3 = "save/mod-derived/gen1online-gamecorner/" .. subpath
+-    if love and love.filesystem and love.filesystem.getInfo then
+-      if love.filesystem.getInfo(p1) then return p1 end
+-      if love.filesystem.getInfo(p2) then return p2 end
+-      if love.filesystem.getInfo(p3) then return p3 end
++    local fs = persistenceFs()
++    if fs and fs.getInfo then
++      if fs.getInfo(p1) then return p1 end
++      if fs.getInfo(p2) then return p2 end
++      if fs.getInfo(p3) then return p3 end
+     end
+     return p1
+   end
+--- a/manifest.json
++++ b/manifest.json
+@@ -1,10 +1,10 @@
+ {
+   "id": "gen1online-gamecorner",
+   "name": "Gen 1 Online - Game Corner Edition",
+-  "version": "0.3.4.3",
++  "version": "0.3.4.3-sandbox.1",
+   "entry": "main.lua",
+   "author": "Gamecorner33, martin2844 (Original Blackjack Mod Creator), and Antigravity",
+-  "description": "Integrated Gen 1 Online MMO, 24/7 GTS Trading, PVP Battles, Casino Lounge, and Live Multiplayer Online Texas Hold'em.",
++  "description": "Integrated Gen 1 Online MMO, 24/7 GTS Trading, PVP Battles, Casino Lounge, and Live Multiplayer Online Texas Hold'em. Android sandbox compatibility patch.",
+   "category": "CONTENT",
