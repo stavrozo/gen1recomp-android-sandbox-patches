@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import gzip
 import json
 import re
 import sys
@@ -151,6 +152,13 @@ def load_metadata() -> dict:
     return json.loads(META_PATH.read_text(encoding="utf-8"))
 
 
+def load_patch_text(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() == ".gz":
+        data = gzip.decompress(data)
+    return data.decode("utf-8")
+
+
 def find_target(source_zip: Path, metadata: dict) -> tuple[str, dict]:
     digest = sha256_file(source_zip)
     for slug, entry in metadata.items():
@@ -164,7 +172,7 @@ def find_target(source_zip: Path, metadata: dict) -> tuple[str, dict]:
 def patch_zip(source_zip: Path, output_zip: Path) -> tuple[str, list[str]]:
     metadata = load_metadata()
     slug, entry = find_target(source_zip, metadata)
-    patch_text = (ROOT / entry["patch_file"]).read_text(encoding="utf-8")
+    patch_text = load_patch_text(ROOT / entry["patch_file"])
     file_patches = parse_unified_diff(patch_text)
     trailing = {item["path"]: item["trailing_newline"] for item in entry["changed_files"]}
     expected_hashes = {item["path"]: item["sha256"] for item in entry["changed_files"]}
