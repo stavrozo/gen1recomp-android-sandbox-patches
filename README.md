@@ -1,80 +1,92 @@
 # Gen1Recomp Android Sandbox Patches
 
-Unofficial compatibility fixes for Gen1Recomp mods affected by newer Android sandbox/runtime API restrictions.
+Unofficial compatibility fixes for Gen1Recomp mods affected by newer Android sandbox/runtime restrictions.
 
 > [!IMPORTANT]
-> This project is **not affiliated with Gen1Recomp or the original mod authors**. It does not distribute ROMs, baseroms, Pokémon game files, or other copyrighted game data.
+> This project is **not affiliated with Gen1Recomp or the original mod authors**. It contains no Pokémon ROMs, baseroms, save files, or extracted game data.
 
-## Why this exists
+## The fixes are here
 
-Recent Gen1Recomp Android builds restrict direct mod access to APIs such as `love.filesystem` and `love.thread`. Several existing mods were written for the older runtime and began failing after the update.
-
-This repository documents the fixes we reproduced and tested, and provides a safe path for applying them without unnecessarily redistributing original mod packages or third-party artwork.
-
-## Current compatibility work
-
-| Mod | Original version | Fix status | Distribution plan |
+| Mod | Original | Android status | Fix |
 |---|---:|---|---|
-| Crystal Animated Sprites with Shiny Visuals | 1.6 | ✅ Android verified | Patch/local patcher only |
-| Wilds of Kanto | 2.1.0 | ✅ Android verified | Patch/local patcher only |
-| Shiny Pokémon | 1.0.1 | ✅ Android verified | Ready-to-install build allowed under MIT + patch source |
-| Gen1Online / Game Corner Edition | 0.3.4.3 | ⚠️ Compatibility patch prepared; online behavior still needs runtime verification | Patch/local patcher only |
-| Dramaless Shape | 2.0.1 | ✅ Android verified | Patch/local patcher only |
+| [Crystal Animated Sprites](patches/crystal-animated-sprites/) | 1.6 | ✅ Verified | [patch](patches/crystal-animated-sprites/android-sandbox.patch) |
+| [Wilds of Kanto](patches/wilds-of-kanto/) | 2.1.0 | ✅ Verified | [patch](patches/wilds-of-kanto/android-sandbox.patch) |
+| [Shiny Pokémon](patches/shiny-pokemon/) | 1.0.1 | ✅ Verified | [patch](patches/shiny-pokemon/android-sandbox.patch) + ready build |
+| [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | ⚠️ Sandbox load fixed; live online behavior experimental | [patch](patches/gen1online-gamecorner/android-sandbox.patch) |
+| [Dramaless Shape](patches/dramaless-shape/) | 2.0.1 | ✅ Verified | [patch](patches/dramaless-shape/android-sandbox.patch) |
 
-## Fixes covered
+## Easiest way to use the patch-only fixes
 
-### Crystal Animated Sprites
-- Replaces blocked direct filesystem access with mod-safe reads.
-- Reworks unsupported file/directory checks.
-- Preserves animated Pokémon sprites and shiny visuals.
+You need **Python 3.10+**. Download/clone this repository, then run:
 
-### Wilds of Kanto
-- Removes blocked direct filesystem usage from affected runtime paths.
-- Preserves packaged-asset fallbacks.
-- Fixes the fallback path that could incorrectly treat full-color sprites as Game Boy luminance sheets.
+```bash
+python scripts/patch_mod.py /path/to/original-mod.zip
+```
 
-### Shiny Pokémon
-- Removes blocked filesystem usage.
-- Keeps shiny DV generation, palettes, battle sparkle behavior, Wilds integration, and follower rendering.
-- Uses in-memory caching where the original implementation attempted runtime filesystem cache writes.
+You do **not** need to choose the mod manually. The patcher checks the SHA-256 of the original ZIP, identifies the exact supported version, applies the matching compatibility patch, verifies the changed files, rejects prohibited ROM/baserom paths, and creates a new ZIP beside the original.
 
-### Gen1Online / Game Corner
-- Removes direct `love.thread` usage from the compatibility build.
-- Reworks blocked filesystem-dependent behavior.
-- Considered **experimental** until live online behavior is tested end-to-end on Android.
+Example:
 
-### Dramaless Shape
-- Fixes the render-distance bug that compared NPC/follower world-pixel coordinates against player grid-cell coordinates.
-- Keeps Voxel mode enabled rather than bypassing occlusion globally.
-- Removes the `baseroms/` placeholder directory from generated Android-compatible packages because current import validation rejects that path.
+```bash
+python scripts/patch_mod.py DRAMALESS_SHAPE-2.0.1.zip
+```
 
-## Distribution and licensing
+Output:
 
-This repo uses a conservative hybrid model:
+```text
+DRAMALESS_SHAPE-2.0.1-sandbox.2-android-import-fix.zip
+```
 
-- **Shiny Pokémon:** upstream is MIT licensed, so a complete compatibility build may be distributed while preserving the upstream license and attribution.
-- **Crystal Animated Sprites:** no clear upstream license was found, so this repo will not redistribute the full original package.
-- **Wilds of Kanto:** code is MIT licensed, but the package includes separately licensed third-party assets, so this repo will publish patch logic instead of a full repack.
-- **Gen1Online / Game Corner:** licensing of the complete project/package is unclear, so this repo will publish patch logic only.
-- **Dramaless Shape:** mixed/inherited licensing makes patch-only distribution the safer approach.
+Your original ZIP is never modified.
 
-Users should download the exact supported original mod version from its original author/source, then apply the local compatibility patch.
+## What was fixed
 
-## Safety rules
+### Crystal Animated Sprites with Shiny Visuals v1.6
 
-- No ROMs or baseroms.
-- No extracted Pokémon game assets.
+The newer runtime blocks raw `love.filesystem` access from mods. This patch moves the affected reads/checks to sandbox-safe mod access and keeps the animated/shiny sprite behavior working.
+
+### Wilds of Kanto v2.1.0
+
+This patch replaces blocked filesystem paths and preserves packaged-asset fallbacks. It also includes the follow-up rendering correction discovered during testing: when runtime luminance generation is unavailable, full-color Pokémon sprites stay `trueColor` instead of being misinterpreted as Game Boy shade sheets.
+
+### Shiny Pokémon v1.0.1
+
+This patch removes blocked filesystem use while retaining shiny DV generation, Gen 2-style palettes, battle sparkles, Wilds integration, and follower rendering. Runtime recolor caching is kept in memory rather than written through the blocked filesystem API.
+
+### Gen1Online / Game Corner Edition v0.3.4.3
+
+This compatibility patch removes direct `love.thread` and blocked filesystem dependencies from the build we tested. The mod loads under the newer sandbox, but the live online/network behavior should still be treated as **experimental** until independently exercised end-to-end.
+
+### Dramaless Shape v2.0.1
+
+This fixes the Voxel-mode bug where followers, wild Pokémon, and trainers could render normally and then suddenly disappear while only their shadow remained.
+
+The root cause was a unit mismatch in render-distance culling: NPC/follower positions were in **world pixels**, while the player was compared using **grid cells**. The patch uses the player's pixel coordinates (with a 16-pixel cell fallback). It also removes the `baseroms/` placeholder folder because the current Android importer rejects packages containing that path.
+
+## Why most full mod ZIPs are not hosted here
+
+We researched the upstream licensing before publishing anything:
+
+- **Shiny Pokémon:** upstream MIT license permits redistribution with attribution, so a ready-to-install compatibility build can be provided.
+- **Crystal Animated Sprites:** no clear upstream license was found, so only the compatibility diff/tooling is published here.
+- **Wilds of Kanto:** source code is MIT, but its package includes separately attributed/licensed third-party artwork, so the complete mod is not repacked here.
+- **Gen1Online / Game Corner:** licensing of the complete current package is unclear, so only the patch is published.
+- **Dramaless Shape:** inherited/mixed licensing makes patch-only distribution the conservative choice.
+
+See [NOTICE.md](NOTICE.md) for attribution and scope details.
+
+## Safety
+
+- No ROMs or baseroms are distributed.
 - No save-file modification is required.
-- Patch tools will operate on a copy of the original mod ZIP and leave the user's source download untouched.
-- Unknown mod versions will be rejected rather than patched blindly.
-- Static checks are not treated as proof of Android runtime compatibility; device testing is documented separately.
+- The patcher refuses unknown ZIP hashes instead of guessing.
+- Keep your original mod downloads as backups.
+- If an upstream author releases an official compatibility fix, prefer the official release.
 
-## Project status
+## Tested combination
 
-🚧 **Work in progress.** Patch files, patcher scripts, tests, attribution notes, and release packaging are being added next.
+The fixes were developed against a Gen1Recomp Android setup where Crystal Animated Sprites, Wilds of Kanto, Shiny Pokémon, and Dramaless Shape were tested in-game after the sandbox/runtime change. Gen1Online's sandbox error was fixed, but its live network path remains marked experimental.
 
-## Credits
+## License
 
-All original mods remain the work of their respective authors. This project only contains compatibility work needed to make supported versions function with newer Gen1Recomp Android sandbox behavior.
-
-If an upstream author ships an official fix, that official version should be preferred over these compatibility patches.
+Original compatibility tooling/documentation in this repository is MIT licensed. Upstream mods, upstream patch context, third-party assets, and Pokémon intellectual property keep their own rights/licenses. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
