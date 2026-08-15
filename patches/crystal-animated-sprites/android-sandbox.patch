@@ -1,0 +1,219 @@
+--- a/crystal_animated_sprites_with_shiny_visuals/README.md
++++ b/crystal_animated_sprites_with_shiny_visuals/README.md
+@@ -82,3 +82,8 @@
+ the shiny reveal only when the Pokémon already has Gen 2 shiny-compatible DVs.
+ 
+ Use it alongside an encounter mod such as All Shiny Encounters when desired.
++
++
++## Local Android sandbox compatibility patch (1.6.1)
++
++This copy replaces raw filesystem calls with Gen1Recomp's sandbox-safe `mod:read()` API and keeps the bundled player-sprite chooser working without directory enumeration. It is an unofficial compatibility patch based on v1.6.
+--- a/crystal_animated_sprites_with_shiny_visuals/main.lua
++++ b/crystal_animated_sprites_with_shiny_visuals/main.lua
+@@ -20,6 +20,27 @@
+ local BASE = mod.path .. "/assets"
+ local SPRITE_BASE = BASE
+ local SHINY_BASE = BASE .. "/shiny_visuals"
++
++-- Gen1Recomp 0.1.84+ runs mods in a sandbox where raw filesystem access is
++-- unavailable.  mod:read() is the supported way to read files shipped with
++-- this mod.  Most of this mod's rendering paths are full mod paths, so strip
++-- the mod root before handing them to mod:read().
++local MOD_PATH_PREFIX = mod.path .. "/"
++local function modRelativePath(path)
++  if type(path) ~= "string" then return nil end
++  if path:sub(1, #MOD_PATH_PREFIX) == MOD_PATH_PREFIX then
++    return path:sub(#MOD_PATH_PREFIX + 1)
++  end
++  return path
++end
++
++local function readModFile(path)
++  local relative = modRelativePath(path)
++  if not relative or relative == "" then return nil end
++  return mod:read(relative)
++end
++
++local fileExistsCache = {}
+ 
+ 
+ local originalUpdate = BattleState.update
+@@ -613,7 +634,7 @@
+   local hit = gifCache[key]
+   if hit ~= nil then return hit or nil end
+ 
+-  local okRead, bytes = pcall(love.filesystem.read, path)
++  local okRead, bytes = pcall(readModFile, path)
+   if not okRead or type(bytes) ~= "string" or bytes == "" then
+     gifCache[key] = false
+     return nil
+@@ -954,7 +975,7 @@
+   local inner = Assets.imageData
+   function Assets.imageData(path)
+     if type(path) == "string" and path:sub(-4) == ".gif" then
+-      local okRead, bytes = pcall(love.filesystem.read, path)
++      local okRead, bytes = pcall(readModFile, path)
+       local gif = okRead and decodeGif(bytes or "")
+       if gif then
+         local frame = gif.frames[1].pixels
+@@ -1066,19 +1087,16 @@
+ end
+ 
+ local function fileExists(path)
+-  local fs = love and love.filesystem
+-  if not (fs and fs.getInfo) then return nil end
+-  local ok, info = pcall(fs.getInfo, path)
+-  if not ok then return nil end
+-  return info ~= nil
+-end
+-
+--- Optimistic file probe: with no filesystem (headless tests) assume the
+--- path exists so the hooks still route to the mod's art; in-game a missing
+--- file lets callers fall back to the engine's own art for that slot.
++  if fileExistsCache[path] ~= nil then return fileExistsCache[path] end
++  local ok, bytes = pcall(readModFile, path)
++  local exists = ok and type(bytes) == "string" and bytes ~= ""
++  fileExistsCache[path] = exists
++  return exists
++end
++
++-- Sandboxed file probe.  Reads are scoped to this mod by mod:read(); cache
++-- the result because sprite routing can ask about the same art every frame.
+ local function artExists(path)
+-  local fs = love and love.filesystem
+-  if not (fs and fs.getInfo) then return true end
+   return fileExists(path)
+ end
+ 
+@@ -1300,22 +1318,68 @@
+ -- exists the function returns nil and the player.sprite hook falls
+ -- through to the engine's own sprite, exactly like the opponents'
+ -- fallback.  TRAINERS (player side off) always returns nil.  Headless
+--- (no filesystem: fileExists answers nil for every probe) resolves the
++-- (headless: missing probes fall back safely) resolves the
+ -- first candidate as a best effort for tests.
+ -- The player-portrait files OPTIONS > PLAYER SPRITE cycles through:
+--- the .png files in assets/trainers/player/, sorted.  With no filesystem
+--- (headless) or nothing listable the default red.png is the only entry.
++-- the .png files in assets/trainers/player/, sorted.  In headless mode
++-- or when nothing is available the default red.png is the only entry.
++local PLAYER_SPRITES = {
++    "agatha_flip.png",
++    "beauty_flip.png",
++    "biker_flip.png",
++    "birdkeeper.png",
++    "blackbelt_flip.png",
++    "blaine_flip.png",
++    "brock_flip.png",
++    "bruno_flip.png",
++    "bugcatcher_flip.png",
++    "burglar_flip.png",
++    "channeler_flip.png",
++    "cooltrainerf.png",
++    "cooltrainerm_flip.png",
++    "cueball.png",
++    "engineer.png",
++    "erika.png",
++    "fisher_flip.png",
++    "gambler_flip.png",
++    "gentleman_flip.png",
++    "giovanni.png",
++    "hiker_flip.png",
++    "jessie_james.png",
++    "jr.trainerf.png",
++    "jr.trainerm_flip.png",
++    "juggler_flip.png",
++    "koga_flip.png",
++    "lance_flip.png",
++    "lass_flip.png",
++    "lorelei.png",
++    "lt.surge_flip.png",
++    "misty_flip.png",
++    "pokemaniac_flip.png",
++    "prof.oak_flip.png",
++    "psychic.png",
++    "red.png",
++    "rival1_flip.png",
++    "rival2_flip.png",
++    "rival3_flip.png",
++    "rocker.png",
++    "rocket_flip.png",
++    "sabrina_flip.png",
++    "sailor.png",
++    "scientist_flip.png",
++    "supernerd_flip.png",
++    "swimmer_flip.png",
++    "tamer_flip.png",
++    "youngster_flip.png",
++}
++
+ local function listPlayerSprites()
+-  local ok, items = pcall(love.filesystem.getDirectoryItems,
+-    ("%s/trainers/player"):format(BASE))
+-  if not (ok and type(items) == "table") then return { "red.png" } end
+   local out = {}
+-  for _, name in ipairs(items) do
+-    if type(name) == "string" and name:sub(-4) == ".png" then
++  for _, name in ipairs(PLAYER_SPRITES) do
++    if fileExists(("%s/trainers/player/%s"):format(BASE, name)) then
+       out[#out + 1] = name
+     end
+   end
+-  table.sort(out)
+   if #out == 0 then return { "red.png" } end
+   return out
+ end
+@@ -1683,9 +1747,7 @@
+ -- the schema's 0.25..4.0 range are skipped.
+ local function registerBackPortraitScale(path)
+   if type(path) ~= "string" then return end
+-  local fs = love and love.filesystem
+-  if not (fs and fs.read) then return end
+-  local ok, bytes = pcall(fs.read, path)
++  local ok, bytes = pcall(readModFile, path)
+   if not (ok and type(bytes) == "string") then return end
+   local w = pngWidth(bytes)
+   if not (w and w > 0) then return end
+@@ -2738,9 +2800,27 @@
+     local function introArtEmpty(cfg, key, i)
+       local entry = cfg and cfg[key] and cfg[key]["frame" .. i]
+       if not (entry and entry.path) then return true end
+-      local okI, info = pcall(love.filesystem.getInfo, entry.path)
+-      if not (okI and info) then return true end
+-      return (info.size or 0) < 150
++
++      -- Raw filesystem metadata is sandboxed now.  Decode the tiny intro
++      -- image through the still-supported love.image API and treat a fully
++      -- uniform frame as the old blank placeholder.
++      local okI, data = pcall(love.image.newImageData, entry.path)
++      if not (okI and data and type(data.getDimensions) == "function"
++          and type(data.getPixel) == "function") then
++        return true
++      end
++      local w, h = data:getDimensions()
++      if not (w and h and w > 0 and h > 0) then return true end
++      local r0, g0, b0, a0 = data:getPixel(0, 0)
++      for y = 0, h - 1 do
++        for x = 0, w - 1 do
++          local r, g, b, a = data:getPixel(x, y)
++          if r ~= r0 or g ~= g0 or b ~= b0 or a ~= a0 then
++            return false
++          end
++        end
++      end
++      return true
+     end
+     local innerIntroNew = IntroMovie.new
+     function IntroMovie.new(game, onDone)
+--- a/crystal_animated_sprites_with_shiny_visuals/manifest.json
++++ b/crystal_animated_sprites_with_shiny_visuals/manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "id": "crystal_animated_sprites_with_shiny_visuals",
+   "name": "Crystal Animated Sprites with Shiny Visuals",
+-  "version": "1.6.0",
++  "version": "1.6.1",
+   "api": 2,
+   "entry": "main.lua",
+   "profile": "content",
