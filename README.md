@@ -11,11 +11,11 @@ Unofficial compatibility fixes for Gen1Recomp mods affected by newer Android san
 |---|---:|---|---|
 | [Crystal Animated Sprites](patches/crystal-animated-sprites/) | 1.6 | ✅ Verified | [patch](patches/crystal-animated-sprites/android-sandbox.patch) |
 | [Wilds of Kanto](patches/wilds-of-kanto/) | 2.1.0 | ✅ Verified | [exact compressed patch](patches/wilds-of-kanto/android-sandbox.patch.gz) |
-| [Shiny Pokémon](patches/shiny-pokemon/) | 1.0.1 | ✅ Verified | [patch](patches/shiny-pokemon/android-sandbox.patch) |
+| [Shiny Pokémon](patches/shiny-pokemon/) | 1.0.1 | ✅ Verified | [exact compressed patch](patches/shiny-pokemon/android-sandbox.patch.gz) |
 | [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | ⚠️ Sandbox load fixed; live online behavior experimental | [exact compressed patch](patches/gen1online-gamecorner/android-sandbox.patch.gz) |
 | [Dramaless Shape](patches/dramaless-shape/) | 2.0.1 | ✅ Verified | [patch](patches/dramaless-shape/android-sandbox.patch) |
 
-The larger Wilds and Gen1Online diffs are stored as `.patch.gz` only to keep the repository compact. The patcher reads them directly; users do not need to decompress them.
+The larger/exact diffs may be stored as `.patch.gz` to keep the repository compact. The patcher reads them directly; users do not need to decompress them.
 
 ## Easiest way to use the fixes
 
@@ -69,7 +69,7 @@ The root cause was a unit mismatch in render-distance culling: NPC/follower posi
 
 We researched the upstream licensing before publishing anything:
 
-- **Shiny Pokémon:** upstream MIT license permits redistribution with attribution. The patch is published here; a prebuilt package can also be released later while preserving the upstream license.
+- **Shiny Pokémon:** upstream MIT license permits redistribution with attribution. The exact compatibility patch is published here; a prebuilt package can also be released later while preserving the upstream license.
 - **Crystal Animated Sprites:** no clear upstream license was found, so only the compatibility diff/tooling is published here.
 - **Wilds of Kanto:** source code is MIT, but its package includes separately attributed/licensed third-party artwork, so the complete mod is not repacked here.
 - **Gen1Online / Game Corner:** licensing of the complete current package is unclear, so only the patch is published.
