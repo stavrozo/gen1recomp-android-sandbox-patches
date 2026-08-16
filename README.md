@@ -5,29 +5,32 @@ Unofficial compatibility fixes and proper sandbox migrations for Gen1Recomp mods
 > [!IMPORTANT]
 > This project is **not affiliated with Gen1Recomp or the original mod authors**. It contains no Pokémon ROMs, baseroms, save files, or extracted game data.
 
-## Gen1Recomp 0.1.91 update
+## Current upstream status
 
 Gen1Recomp **0.1.91** added a temporary legacy compatibility layer for many pre-sandbox APIs. Older mods using calls such as `love.filesystem`, `io.open`, `dofile`, `loadfile`, `love.system`, and `love.event` may therefore start loading again without these patches.
 
 That compatibility layer is intentionally a migration bridge rather than the long-term API. It reroutes old calls through safer per-mod behavior and reports which calls should be migrated.
 
-These patches are still useful because they move supported mods toward the current mod APIs instead of depending on that temporary bridge. Also:
+Two upstream releases now supersede parts of this repository:
 
-- `love.thread` is **still not available to mods**, so Gen1Online/Game Corner still needs its compatibility rewrite.
-- The Dramaless Shape Voxel render-distance fix is a separate gameplay/rendering bug and is unrelated to the legacy compatibility layer.
-- The Dramaless `baseroms/` packaging cleanup is separate from the filesystem compatibility shim.
+- **Wilds of Kanto 2.1.5:** officially migrated to the current Gen1Recomp sandbox APIs and also fixes Wilds/followers/town Pokémon disappearing after battles. **Use upstream 2.1.5; our Wilds patch is archived for older 2.1.0 installs.**
+- **Dramaless Shape 2.0.2:** officially removes the rejected `baseroms/` packaging and places the manifest at the ZIP root. The separate Voxel render-distance coordinate bug is **not fixed in 2.0.2**; the upstream issue remains open and the 2.0.2 source still compares NPC world-pixel positions against player grid-cell coordinates.
 
-If an original mod author releases an official updated version, prefer the upstream release.
+Other important notes:
+
+- `love.thread` is **still not available to mods**, so the Gen1Online/Game Corner compatibility rewrite remains relevant for the exact older build tested here.
+- The Dramaless Shape Voxel render-distance fix is a separate rendering bug and is unrelated to the legacy compatibility layer.
+- If an original mod author releases an official updated version, prefer the upstream release.
 
 ## The fixes are here
 
-| Mod | Original | Status on 0.1.91 | Fix |
+| Mod | Original tested | Current status | Fix |
 |---|---:|---|---|
 | [Crystal Animated Sprites](patches/crystal-animated-sprites/) | 1.6 | Legacy compat may allow the original to load; patch performs the proper migration | [patch](patches/crystal-animated-sprites/android-sandbox.patch) |
-| [Wilds of Kanto](patches/wilds-of-kanto/) | 2.1.0 | Legacy compat helps old filesystem calls; patch also contains our rendering fallback correction | [exact compressed patch](patches/wilds-of-kanto/android-sandbox.patch.gz) |
+| [Wilds of Kanto](patches/wilds-of-kanto/) | 2.1.0 | **Archived:** superseded by official Wilds 2.1.5 | [historical exact patch](patches/wilds-of-kanto/android-sandbox.patch.gz) |
 | [Shiny Pokémon](patches/shiny-pokemon/) | 1.0.1 | Legacy compat may allow the original to load; patch removes the old filesystem dependency | [exact compressed patch](patches/shiny-pokemon/android-sandbox.patch.gz) |
-| [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | **Still relevant:** `love.thread` remains unsupported; live online behavior experimental | [exact compressed patch](patches/gen1online-gamecorner/android-sandbox.patch.gz) |
-| [Dramaless Shape](patches/dramaless-shape/) | 2.0.1 | **Still relevant:** independent Voxel render-distance bug + packaging cleanup | [patch](patches/dramaless-shape/android-sandbox.patch) |
+| [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | `love.thread` rewrite still relevant for this tested build; live online behavior experimental | [exact compressed patch](patches/gen1online-gamecorner/android-sandbox.patch.gz) |
+| [Dramaless Shape](patches/dramaless-shape/) | 2.0.1 | **Render bug still exists upstream in 2.0.2.** Packaging is fixed upstream; existing patch targets 2.0.1 only | [2.0.1 patch](patches/dramaless-shape/android-sandbox.patch) |
 
 The larger/exact diffs may be stored as `.patch.gz` to keep the repository compact. The patcher reads them directly; users do not need to decompress them.
 
@@ -41,7 +44,7 @@ python scripts/patch_mod.py /path/to/original-mod.zip
 
 You do **not** need to choose the mod manually. The patcher checks the SHA-256 of the original ZIP, identifies the exact supported version, applies the matching compatibility patch, verifies the changed files, rejects prohibited ROM/baserom paths, and creates a new ZIP beside the original.
 
-Example:
+Example for the legacy Dramaless 2.0.1 package:
 
 ```bash
 python scripts/patch_mod.py DRAMALESS_SHAPE-2.0.1.zip
@@ -55,15 +58,20 @@ DRAMALESS_SHAPE-2.0.1-sandbox.2-android-import-fix.zip
 
 Your original ZIP is never modified.
 
+> [!NOTE]
+> Do **not** apply the 2.0.1 Dramaless patch to upstream 2.0.2. The 2.0.2 release already fixes packaging, but still contains the render-distance coordinate bug. Until that is fixed upstream, setting Dramaless render distance to `FULL` avoids the faulty culling path.
+
 ## What was fixed
 
 ### Crystal Animated Sprites with Shiny Visuals v1.6
 
 When the stricter sandbox first landed, raw `love.filesystem` access used by the mod stopped working. Gen1Recomp 0.1.91 now provides a temporary legacy stand-in for those calls, but this patch migrates the affected reads/checks to sandbox-safe mod access and keeps the animated/shiny sprite behavior working without relying on that compatibility bridge.
 
-### Wilds of Kanto v2.1.0
+### Wilds of Kanto v2.1.0 — archived
 
-This patch migrates affected filesystem paths and preserves packaged-asset fallbacks. It also includes the follow-up rendering correction discovered during testing: when runtime luminance generation is unavailable, full-color Pokémon sprites stay `trueColor` instead of being misinterpreted as Game Boy shade sheets.
+This historical patch migrated affected filesystem paths, preserved packaged-asset fallbacks, and included the follow-up `trueColor` rendering correction discovered during testing.
+
+**Upstream Wilds of Kanto 2.1.5 now replaces this patch.** The official release migrates to supported mod asset APIs and fixes Wilds/followers/town Pokémon disappearing after battles. New installs should use the upstream release instead of patching 2.1.0.
 
 ### Shiny Pokémon v1.0.1
 
@@ -75,13 +83,15 @@ This compatibility patch removes direct `love.thread` and blocked filesystem dep
 
 The mod loads under the newer sandbox, but the live online/network behavior should still be treated as **experimental** until independently exercised end-to-end.
 
-### Dramaless Shape v2.0.1
+### Dramaless Shape v2.0.1 / upstream 2.0.2 status
 
-This fixes the Voxel-mode bug where followers, wild Pokémon, and trainers could render normally and then suddenly disappear while only their shadow remained.
+The 2.0.1 patch fixes the Voxel-mode bug where followers, wild Pokémon, and trainers could disappear while only their shadows remained.
 
-The root cause was a unit mismatch in render-distance culling: NPC/follower positions were in **world pixels**, while the player was compared using **grid cells**. The patch uses the player's pixel coordinates (with a 16-pixel cell fallback).
+The root cause is a unit mismatch in render-distance culling: NPC/follower positions are in **world pixels**, while the player is compared using **grid cells**. The patch uses the player's pixel coordinates, with a 16-pixel cell fallback.
 
-It also removes the `baseroms/` placeholder folder from the generated compatibility package because the stricter importer rejects packages containing that path. This issue is separate from the 0.1.91 legacy API compatibility layer.
+Our 2.0.1 package also removed the old `baseroms/` placeholder because the stricter importer rejected it.
+
+Upstream **Dramaless Shape 2.0.2 now fixes the packaging problem itself**, so that part of our patch is no longer needed for current releases. However, the render-distance calculation in 2.0.2 still contains the pixel-vs-cell mismatch, and the corresponding upstream issue remains open.
 
 ## Why full mod ZIPs are not hosted here
 
@@ -91,7 +101,7 @@ We researched the upstream licensing before publishing anything:
 - **Crystal Animated Sprites:** no clear upstream license was found, so only the compatibility diff/tooling is published here.
 - **Wilds of Kanto:** source code is MIT, but its package includes separately attributed/licensed third-party artwork, so the complete mod is not repacked here.
 - **Gen1Online / Game Corner:** licensing of the complete current package is unclear, so only the patch is published.
-- **Dramaless Shape:** inherited/mixed licensing makes patch-only distribution the conservative choice.
+- **Dramaless Shape:** this repository keeps patch-only distribution for the historical compatibility work rather than repacking the complete upstream mod.
 
 See [NOTICE.md](NOTICE.md) for attribution and scope details.
 
@@ -107,7 +117,7 @@ See [NOTICE.md](NOTICE.md) for attribution and scope details.
 
 The fixes were developed against a Gen1Recomp Android setup where Crystal Animated Sprites, Wilds of Kanto, Shiny Pokémon, and Dramaless Shape were tested in-game after the sandbox/runtime change. Gen1Online's sandbox/load issue was fixed, but its live network path remains marked experimental.
 
-Gen1Recomp 0.1.91's legacy compatibility layer may make some unpatched pre-sandbox mods load again. That should not be treated as proof that every old mod is fully migrated or that mod-specific bugs have been resolved.
+Wilds 2.1.5 is now the recommended upstream Wilds release. Dramaless 2.0.2 fixes the importer/package issue but still has the render-distance culling bug documented above.
 
 ## License
 
