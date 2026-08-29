@@ -154,53 +154,155 @@ index 0000000..63c641c
 +  end
 +  if canvas.setFilter then canvas:setFilter("nearest", "nearest") end
 +  panelCanvas = canvas
-È™]\›ˆØ[˜\ÂŠÙ[™ŠÂŠÛØØ[[˜Ý[ÛˆØ]™QÜ˜\XÜÊÊBŠÈØØ[ÞÞKÝËÚŠÈYˆË™Ù]ØÚ\ÜÛÜˆ[ˆÞÞKÝËÚHË™Ù]ØÚ\ÜÛÜŠ
-H[™ŠÈØØ[›[™[HH˜[H‹š[ŠÈYˆË™Ù]›[™[ÙH[ˆ›[™[HHË™Ù]›[™[ÙJ
-H[™ŠÈØØ[\Üš]BŠÈYˆË™Ù]\[ÙH[ˆ\Üš]HHË™Ù]\[ÙJ
-H[™ŠÈ™]\›ˆÂŠÈØ[˜\ÈHË™Ù]Ø[˜\È[™Ë™Ù]Ø[˜\Ê
-HÜˆš[ŠÈÚY\ˆHË™Ù]ÚY\ˆ[™Ë™Ù]ÚY\Š
-HÜˆš[ŠÈ›[™H›[™[HH[KŠÈ\H\Üš]HHÜš]KŠÈÛÛÜˆHË™Ù]ÛÛÜˆ[™ÈË™Ù]ÛÛÜŠ
-HHÜˆÈKKKHKŠÈØÚ\ÜÛÜˆHÞHš[[™ÈÞÞKÝËÚHÜˆ˜[ÙKŠÈBŠÙ[™ŠÂŠÛØØ[[˜Ý[Ûˆ™\ÝÜ™QÜ˜\XÜÊËÊBŠÈYˆËœÙ]Ø[˜\È[ˆËœÙ]Ø[˜\ÊË˜Ø[˜\ÊH[™ŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\ŠËœÚY\ŠH[™ŠÈYˆËœÙ]\[ÙH[‚ŠÈYˆË™\[ˆËœÙ]\[ÙJË™\ËÜš]JH[ÙHËœÙ]\[ÙJ
-H[™ŠÈ[™ŠÈYˆËœÙ]›[™[ÙH[ˆËœÙ]›[™[ÙJË˜›[™Üˆ˜[H‹Ë˜[JH[™ŠÈYˆËœÙ]ÛÛÜˆ[ˆËœÙ]ÛÛÜŠ[œXÚÊË˜ÛÛÜŠJH[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[‚ŠÈYˆËœØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ[œXÚÊËœØÚ\ÜÛÜŠJH[ÙHËœÙ]ØÚ\ÜÛÜŠ
-H[™ŠÈ[™ŠÙ[™ŠÂŠÛØØ[[˜Ý[Ûˆ™[ØØ]J™[™\™\‹˜]JBŠÈØØ[HXÙ[Y[
-™[™\™\‹˜]JBŠÈYˆ›Ý[ˆ™]\›ˆ˜[ÙH[™ŠÈØØ[ÛÜ›H™[™\™\‹ÛÜ›Ý™\œšYBŠÈØØ[ZHH™[™\™\‹˜Ø[˜\ÂŠÈYˆ›Ý
-ÛÜ›[™ZJH[ˆ™]\›ˆ˜[ÙH[™ŠÈØØ[[™[H[œÝ\™T[™[Ø[˜\Ê
-BŠÈYˆ›Ý[™[[ˆ™]\›ˆ˜[ÙH[™ŠÂŠÈØØ[ÝX›HHœ˜[YR\ÔÝX›J˜]JBŠÈKH™]™\ˆÚÝÈHØXÚY[™[œ›ÛHH™]š[Ý\ÈÜÛ™[Ø˜]K‚ŠÈYˆ›ÝÝX›H[™
-›Ý[™[˜[YÜˆØXÚY[™[^HH˜]K™[™[^JH[‚ŠÈ™]\›ˆ˜[ÙBŠÈ[™ŠÂŠÈØØ[ÈHÝ™K™Ü˜\XÜÂŠÈØØ[Ø]™YHØ]™QÜ˜\XÜÊÊBŠÈØØ[ÚË\œˆHØ[
-[˜Ý[ÛŠ
-BŠÈYˆÝX›H[‚ŠÈKHÛ˜\ÚÝÛ›HHÛX[‹[œÚZÙ[ˆ[™[ˆ]XÚÈœ˜[Y\È™]\ÙH\ÈØXÚBŠÈKHÛÈH]XÚYQÝ^\ÈØÚÙYÈH\ÚXØ[ØÜ™Y[‹‚ŠÈËœÙ]Ø[˜\Ê[™[
-BŠÈË˜ÛX\Š
-BŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\Š
-H[™ŠÈYˆËœÙ]\[ÙH[ˆËœÙ]\[ÙJ
-H[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ
-H[™ŠÈËœÙ]›[™[ÙJ˜[H‹œ™[][\YYŠBŠÈËœÙ]ÛÛÜŠKKKJBŠÈË™˜]ÊZK\œÛÝ\˜ÙV\œÛÝ\˜ÙVJBŠÈ[™[˜[YHYBŠÈØXÚY[™[^HH˜]K™[™[^BŠÈ[™ŠÂŠÈKH™[[Ý™HH˜]]™HÝÈÛÜH]H^XÝÜÚ][ÛˆÚYP˜]KœÚZÙ[Š
-BŠÈKH\ÙY\Èœ˜[YKˆHØXÚY]XÚY[™[]Ù[ˆÙ\È›Ý[Ý™K‚ŠÈËœÙ]Ø[˜\ÊZJBŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\Š
-H[™ŠÈYˆËœÙ]\[ÙH[ˆËœÙ]\[ÙJ
-H[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ
-H[™ŠÈËœÙ]›[™[ÙJœ™\XÙHŠBŠÈËœÙ]ÛÛÜŠ
-BŠÈËœ™XÝ[™ÛJ™š[‹˜ÛX\–˜ÛX\–KS‘SVWÕËS‘SVWÒ
-BŠÂŠÈKH™\Ù\™HÚYP˜]IÜÈ[\ØÜ™Y[ˆÚ]H›\ÚÝ™\ˆHÛX\™YÛÝ\˜ÙBŠÈKH™XÝ[™ÛNÈÝ\Ú\ÙH™[[Ýš[™ÈHÝÈQÛÝ[X]™H[ˆ[™›\ÚYÛK‚ŠÈØØ[žH˜]K™žŠÈYˆž[™
-Û[X™\Šž™›\ÚÜˆ
-HÜˆ
-HˆŠÈ[™
-
-Û[X™\Š˜]K™œ˜[YHÜˆ
-HÜˆ
-H	H
-Hˆ[‚ŠÈËœÙ]ÛÛÜŠKKKŽJBŠÈËœ™XÝ[™ÛJ™š[‹˜ÛX\–˜ÛX\–KS‘SVWÕËS‘SVWÒ
-BŠÈ[™ŠÂŠÈKHH›Þ[ÛÜ›Ý™\œšYH\ÈH\ØØ[OLH[\™\ÛÛ][ÛˆÝ\™˜XÙKÛÂŠÈKH™[™\™\‹™œ˜[YT™XÝÊ
-K•\\È\™XÝHHœ˜[YXY™™\‹\^[ØØ[H™YYYŠÈKH›ÜˆÛ™H˜]]™HÒQH^[‚ŠÈËœÙ]Ø[˜\ÊÛÜ›
-BŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\Š
-H[™ŠÈYˆËœÙ]\[ÙH[ˆËœÙ]\[ÙJ
-H[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ
-H[™ŠÈËœÙ]›[™[ÙJ˜[H‹œ™[][\YYŠBŠÈËœÙ]ÛÛÜŠKKKJBŠÈË™˜]Ê[™[\™Ù]\™Ù]KœØØ[KœØØ[JBŠÈ[™
-BŠÈ™\ÝÜ™QÜ˜\XÜÊËØ]™Y
-BŠÂŠÈYˆ›ÝÚÈ[‚ŠÈØØ[ÙÈHˆ[™‹›ÙÂŠÈYˆÙÈ[™ÙËØ\›ˆ[‚ŠÈÙÎØ\›Š–ÑSPSTÔ×ÔÒTWH[™[^HQ™[ØØ][Ûˆ˜Z[Yˆ	\È‹ÜÝš[™Ê\œŠJBŠÈ[™ŠÈ™]\›ˆ˜[ÙBŠÈ[™ŠÈ™]\›ˆYBŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQš[œÝ[
-
-BŠÈØØ[™[™\™\ˆH™\]Z\™JœÜ˜Ëœ™[™\‹”™[™\™\ˆŠBŠÈYˆ™[™\™\‹™[™œ˜[YHOH[œÝ[Y[™œ˜[YH[ˆ™]\›ˆYH[™ŠÈYˆ›Ý™[™\™\‹™˜[X[\ÜÑ[™[^RYš[˜[˜\ÙH[‚ŠÈ™[™\™\‹™˜[X[\ÜÑ[™[^RYš[˜[˜\ÙHH™[™\™\‹™[™œ˜[YBŠÈ[™ŠÈØØ[˜\ÙHH™[™\™\‹™˜[X[\ÜÑ[™[^RYš[˜[˜\ÙBŠÈ[œÝ[Y[™œ˜[YHH[˜Ý[ÛŠ™[™\™\‹‹‹ŠBŠÈØØ[Ý]HH™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]BŠÈØØ[˜]HHÝ]H[™Ý]K˜˜]BŠÈYˆ˜]H[ˆ™[ØØ]J™[™\™\‹˜]JH[™ŠÈ™]\›ˆ˜\ÙJ™[™\™\‹‹‹ŠBŠÈ[™ŠÈ™[™\™\‹™[™œ˜[YHH[œÝ[Y[™œ˜[YBŠÈ™]\›ˆYBŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQ˜™YÚ[Š˜]JBŠÈQš[œÝ[
-
-BŠÈ[™[˜[YH˜[ÙBŠÈØXÚY[™[^HHš[ŠÈØØ[™[™\™\ˆH˜]H[™˜]K™Ø[YH[™˜]K™Ø[YKœ™[™\™\‚ŠÈYˆXÝ]™T™[™\™\ˆ[™XÝ]™T™[™\™\ˆH™[™\™\ˆ[‚ŠÈXÝ]™T™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]HHš[ŠÈ[™ŠÈXÝ]™T™[™\™\ˆH™[™\™\‚ŠÈYˆ™[™\™\ˆ[ˆ™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]HHÈ˜]HH˜]HH[™ŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQ™š[š\Ú
-
-BŠÈYˆXÝ]™T™[™\™\ˆ[ˆXÝ]™T™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]HHš[[™ŠÈXÝ]™T™[™\™\ˆHš[ŠÈ[™[˜[YH˜[ÙBŠÈØXÚY[™[^HHš[ŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQš[˜[Y]J
-BŠÈYˆ[™[Ø[˜\È[™[™[Ø[˜\Ëœ™[X\ÙH[ˆØ[
-[™[Ø[˜\Ëœ™[X\ÙK[™[Ø[˜\ÊH[™ŠÈ[™[Ø[˜\ÈHš[ŠÈ[™[˜[YH˜[ÙBŠÈØXÚY[™[^HHš[ŠÙ[™ŠÂŠÜ™]\›ˆQ
++  return canvas
++end
++
++local function saveGraphics(g)
++  local sx, sy, sw, sh
++  if g.getScissor then sx, sy, sw, sh = g.getScissor() end
++  local blend, alpha = "alpha", nil
++  if g.getBlendMode then blend, alpha = g.getBlendMode() end
++  local depth, write
++  if g.getDepthMode then depth, write = g.getDepthMode() end
++  return {
++    canvas = g.getCanvas and g.getCanvas() or nil,
++    shader = g.getShader and g.getShader() or nil,
++    blend = blend, alpha = alpha,
++    depth = depth, write = write,
++    color = g.getColor and { g.getColor() } or { 1, 1, 1, 1 },
++    scissor = sx ~= nil and { sx, sy, sw, sh } or false,
++  }
++end
++
++local function restoreGraphics(g, s)
++  if g.setCanvas then g.setCanvas(s.canvas) end
++  if g.setShader then g.setShader(s.shader) end
++  if g.setDepthMode then
++    if s.depth then g.setDepthMode(s.depth, s.write) else g.setDepthMode() end
++  end
++  if g.setBlendMode then g.setBlendMode(s.blend or "alpha", s.alpha) end
++  if g.setColor then g.setColor(unpack(s.color)) end
++  if g.setScissor then
++    if s.scissor then g.setScissor(unpack(s.scissor)) else g.setScissor() end
++  end
++end
++
++local function relocate(renderer, battle)
++  local p = placement(renderer, battle)
++  if not p then return false end
++  local world = renderer.worldOverride
++  local ui = renderer.canvas
++  if not (world and ui) then return false end
++  local panel = ensurePanelCanvas()
++  if not panel then return false end
++
++  local stable = frameIsStable(battle)
++  -- Never show a cached panel from the previous opponent/battle.
++  if not stable and (not panelValid or cachedEnemy ~= battle.enemy) then
++    return false
++  end
++
++  local g = love.graphics
++  local saved = saveGraphics(g)
++  local ok, err = pcall(function()
++    if stable then
++      -- Snapshot only a clean, unshaken panel. Attack frames reuse this cache
++      -- so the detached HUD stays locked to the physical screen.
++      g.setCanvas(panel)
++      g.clear(0, 0, 0, 0)
++      if g.setShader then g.setShader() end
++      if g.setDepthMode then g.setDepthMode() end
++      if g.setScissor then g.setScissor() end
++      g.setBlendMode("alpha", "premultiplied")
++      g.setColor(1, 1, 1, 1)
++      g.draw(ui, -p.sourceX, -p.sourceY)
++      panelValid = true
++      cachedEnemy = battle.enemy
++    end
++
++    -- Remove the native low copy at the exact position WideBattle.shaken()
++    -- used this frame.  The cached detached panel itself does not move.
++    g.setCanvas(ui)
++    if g.setShader then g.setShader() end
++    if g.setDepthMode then g.setDepthMode() end
++    if g.setScissor then g.setScissor() end
++    g.setBlendMode("replace")
++    g.setColor(0, 0, 0, 0)
++    g.rectangle("fill", p.clearX, p.clearY, ENEMY_W, ENEMY_H)
++
++    -- Preserve WideBattle's full-screen white flash over the cleared source
++    -- rectangle; otherwise removing the low HUD would leave an unflashed hole.
++    local fx = battle.fx
++    if fx and (tonumber(fx.flash or 0) or 0) > 0
++        and ((tonumber(battle.frame or 0) or 0) % 4) < 2 then
++      g.setColor(1, 1, 1, 0.85)
++      g.rectangle("fill", p.clearX, p.clearY, ENEMY_W, ENEMY_H)
++    end
++
++    -- The voxel world override is a dpiscale=1 full-resolution surface, so
++    -- Renderer.frameRects().Up is directly the framebuffer-pixel scale needed
++    -- for one native WIDE pixel.
++    g.setCanvas(world)
++    if g.setShader then g.setShader() end
++    if g.setDepthMode then g.setDepthMode() end
++    if g.setScissor then g.setScissor() end
++    g.setBlendMode("alpha", "premultiplied")
++    g.setColor(1, 1, 1, 1)
++    g.draw(panel, p.targetX, p.targetY, 0, p.scale, p.scale)
++  end)
++  restoreGraphics(g, saved)
++
++  if not ok then
++    local log = V and V.log
++    if log and log.warn then
++      log:warn("[DRAMALESS_SHAPE] enemy HUD relocation failed: %s", tostring(err))
++    end
++    return false
++  end
++  return true
++end
++
++function HUD.install()
++  local Renderer = require("src.render.Renderer")
++  if Renderer.endFrame == installedEndFrame then return true end
++  if not Renderer.dramalessEnemyHudFinalBase then
++    Renderer.dramalessEnemyHudFinalBase = Renderer.endFrame
++  end
++  local base = Renderer.dramalessEnemyHudFinalBase
++  installedEndFrame = function(renderer, ...)
++    local state = renderer.dramalessEnemyHudState
++    local battle = state and state.battle
++    if battle then relocate(renderer, battle) end
++    return base(renderer, ...)
++  end
++  Renderer.endFrame = installedEndFrame
++  return true
++end
++
++function HUD.begin(battle)
++  HUD.install()
++  panelValid = false
++  cachedEnemy = nil
++  local renderer = battle and battle.game and battle.game.renderer
++  if activeRenderer and activeRenderer ~= renderer then
++    activeRenderer.dramalessEnemyHudState = nil
++  end
++  activeRenderer = renderer
++  if renderer then renderer.dramalessEnemyHudState = { battle = battle } end
++end
++
++function HUD.finish()
++  if activeRenderer then activeRenderer.dramalessEnemyHudState = nil end
++  activeRenderer = nil
++  panelValid = false
++  cachedEnemy = nil
++end
++
++function HUD.invalidate()
++  if panelCanvas and panelCanvas.release then pcall(panelCanvas.release, panelCanvas) end
++  panelCanvas = nil
++  panelValid = false
++  cachedEnemy = nil
++end
++
++return HUD
