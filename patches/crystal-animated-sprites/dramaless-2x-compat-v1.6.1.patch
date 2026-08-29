@@ -1,0 +1,57 @@
+diff --git a/main.lua b/main.lua
+index 0e218c9..48831dc 100644
+--- a/main.lua
++++ b/main.lua
+@@ -175,7 +175,9 @@ local function modePalette(data, baseName, mode)
+   return base
+ end
+ 
+-local VOXEL_MOD_IDS = { "DRAMATIC_SHAPE", "BATTLE_ART_VOXEL_FORK" }
++local VOXEL_MOD_IDS = {
++  "DRAMALESS_SHAPE", "DRAMATIC_SHAPE", "BATTLE_ART_VOXEL_FORK",
++}
+ 
+ local function voxelMod()
+   local ok, Game = pcall(require, "src.core.Game")
+@@ -194,7 +196,23 @@ local function voxelContext(battle)
+   if battle.__crystalVoxel then return true end
+   local ok, staged = pcall(function()
+     local voxel = voxelMod()
+-    local lib = voxel and voxel.lib
++    if not voxel then return false end
++
++    -- Dramaless Shape 2.x exposes its active standalone session directly.
++    -- When StadiumBattleFX hosts the same providers the standalone host is
++    -- dormant, while the arena provider owns a live overworld state for the
++    -- duration of the voxel battle.
++    local host = voxel.voxel2DBattleHost
++    if host and host.session and host.session.battle == battle then
++      return true
++    end
++    local arenaProvider = voxel.voxelArenaProvider
++    if arenaProvider and arenaProvider.state then
++      return true
++    end
++
++    -- Legacy Dramatic Shape / voxel-fork contract.
++    local lib = voxel.lib
+     if lib and lib.require then
+       local okOB, OverworldBattle = pcall(lib.require, "OverworldBattle")
+       if okOB and OverworldBattle then
+@@ -2061,6 +2079,16 @@ end
+ BattleState.update = function(self, dt)
+   local result = originalUpdate(self, dt)
+ 
++  -- A current Dramaless 2.x provider may become active after battle.started
++  -- has already initialized Crystal's frames. Rebuild them once when the
++  -- voxel session becomes live so trimGround() uses its 3D-only path.
++  local staged = voxelContext(self)
++  if staged and not self.__crystalVoxelFramesReady then
++    self.__crystalVoxelFramesReady = true
++    resetEnemyAnimation(self)
++    resetPlayerAnimation(self)
++  end
++
+   if voxelPaper then markCrystalBattlers(self) end
+ 
+   -- Reset both battlers when the COLORS mode changes so the

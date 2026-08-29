@@ -1,0 +1,206 @@
+diff --git a/lib/VoxelBattleCardProvider.lua b/lib/VoxelBattleCardProvider.lua
+index 5d1a84c..5a2af3c 100644
+--- a/lib/VoxelBattleCardProvider.lua
++++ b/lib/VoxelBattleCardProvider.lua
+@@ -315,6 +315,7 @@ end
+ 
+ function Provider:begin(context, arena)
+   self:install(context)
++  V.require("VoxelBattleHUD").begin(context and context.battle)
+   active = true
+   context.arena = arena or context.arena
+   textures.player, textures.enemy = nil, nil
+@@ -383,6 +384,8 @@ function Provider:cameraLocked(context)
+ end
+ 
+ function Provider:finish()
++  local okHud, hud = pcall(V.require, "VoxelBattleHUD")
++  if okHud and hud and hud.finish then hud.finish() end
+   active = false
+   textures.player, textures.enemy = nil, nil
+   visible.player, visible.enemy = false, false
+diff --git a/lib/VoxelBattleHUD.lua b/lib/VoxelBattleHUD.lua
+new file mode 100644
+index 0000000..63c641c
+--- /dev/null
++++ b/lib/VoxelBattleHUD.lua
+@@ -0,0 +1,281 @@
++-- Portrait WIDE/FILL enemy-HUD placement for Dramaless voxel battles.
++--
++-- Keep Gen1Recomp's normal 304x144 WIDE HUD pipeline intact.  On a tall
++-- portrait display the width-limited FILL surface sits well below the top of
++-- the physical viewport, so its enemy panel at logical (0,0) overlaps the 3D
++-- opponent.  At final composition time, copy that already-rendered 128x32
++-- panel onto Dramaless's full-resolution world override just above the battle
++-- surface, then clear only the old panel rectangle from the UI canvas.
++--
++-- No detached-anchor compositor is used here; player HUD, message
++-- boxes and menus therefore remain byte-for-byte in their normal WIDE layout.
++
++local V = ...
++
++local HUD = {}
++local ENEMY_W, ENEMY_H = 128, 32
++local GAP = 8            -- native WIDE pixels between panel and battle surface
++local MIN_TOP = 8        -- keep at least this many native pixels from viewport top
++
++local panelCanvas
++local panelValid = false
++local cachedEnemy
++local installedEndFrame
++local activeRenderer
++
++local function boolMethod(obj, name)
++  local fn = obj and obj[name]
++  if type(fn) ~= "function" then return false end
++  local ok, value = pcall(fn, obj)
++  return ok and value and true or false
++end
++
++local function battleIsTopState(battle)
++  local stack = battle and battle.game and battle.game.stack
++  if not (stack and type(stack.top) == "function") then return true end
++  local ok, top = pcall(stack.top, stack)
++  return not ok or top == battle
++end
++
++local function enemyPanelVisible(battle)
++  if not (battle and battle.enemy) then return false end
++  if not battleIsTopState(battle) then return false end
++  if not boolMethod(battle, "statusHUDVisible") then return false end
++  if battle.showEnemyTrainer or battle.enemySendingOut or battle.introBalls
++      or battle.blankForAskName or battle.enemy.fainted then return false end
++  if tonumber(battle.introSlide or 0) ~= 0 then return false end
++
++  local grow = battle.growInScale
++  if type(grow) == "function" then
++    local ok, value = pcall(grow, battle, battle.enemy)
++    if ok and value ~= nil then return false end
++  end
++  return true
++end
++
++
++local function frameIsStable(battle)
++  if battle.animPlaying then return false end
++  local fx = battle.fx
++  if not fx then return true end
++  return tonumber(fx.shakeX or 0) == 0
++     and tonumber(fx.shakeY or 0) == 0
++     and tonumber(fx.shake or 0) <= 0
++     and tonumber(fx.flash or 0) <= 0
++end
++
++-- WideBattle.shaken() translates the native HUD by the same screen-shake
++-- offset used for the battlefield.  The detached enemy panel must ignore
++-- that motion, but the low copy still has to be erased where WideBattle
++-- actually drew it this frame.
++local function hudShakeOffset(battle)
++  local fx = battle and battle.fx
++  if not fx then return 0, 0 end
++  local sx = tonumber(fx.shakeX or 0) or 0
++  local sy = tonumber(fx.shakeY or 0) or 0
++  if sx == 0 and sy == 0 and (tonumber(fx.shake or 0) or 0) > 0 then
++    sx = ((tonumber(battle.frame or 0) or 0) % 4) < 2 and 2 or -2
++  end
++  return sx, sy
++end
++
++local function placement(renderer, battle)
++  if not (renderer and renderer.worldOverride and renderer.canvas) then return nil end
++  if not (boolMethod(battle, "isWideBattleLayout")
++      and boolMethod(battle, "wantsFillScale")
++      and enemyPanelVisible(battle)) then return nil end
++  if type(renderer.frameRects) ~= "function" then return nil end
++
++  local ok, r = pcall(renderer.frameRects, renderer)
++  if not (ok and type(r) == "table") then return nil end
++  local up = tonumber(r.Up) or 0
++  local dpiX, dpiY = tonumber(r.dpiX) or 1, tonumber(r.dpiY) or 1
++  local uox, uoy = tonumber(r.uox), tonumber(r.uoy)
++  local vuy = tonumber(r.vuy) or 0
++  if not (up > 0 and uox and uoy and dpiX > 0 and dpiY > 0) then return nil end
++
++  -- This compatibility case exists only when the centred WIDE/FILL surface
++  -- leaves enough real space above it for the complete panel plus a gap.
++  local battleTopPx = uoy * dpiY
++  local viewportTopPx = vuy * dpiY
++  local topPx = math.floor(battleTopPx - (ENEMY_H + GAP) * up + 0.5)
++  local minPx = viewportTopPx + MIN_TOP * up
++  if topPx < minPx then return nil end
++
++  local shakeX, shakeY = hudShakeOffset(battle)
++  return {
++    sourceX = 0, sourceY = 0,
++    clearX = shakeX, clearY = shakeY,
++    targetX = math.floor(uox * dpiX + 0.5),
++    targetY = topPx,
++    scale = up,
++  }
++end
++
++local function ensurePanelCanvas()
++  if panelCanvas and panelCanvas.getWidth and panelCanvas.getHeight
++      and panelCanvas:getWidth() == ENEMY_W
++      and panelCanvas:getHeight() == ENEMY_H then
++    return panelCanvas
++  end
++  if panelCanvas and panelCanvas.release then pcall(panelCanvas.release, panelCanvas) end
++  local ok, canvas = pcall(love.graphics.newCanvas,
++    ENEMY_W, ENEMY_H, { dpiscale = 1 })
++  if not (ok and canvas) then
++    panelCanvas = nil
++    return nil
++  end
++  if canvas.setFilter then canvas:setFilter("nearest", "nearest") end
++  panelCanvas = canvas
+È™]\›ˆØ[˜\ÂŠÙ[™ŠÂŠÛØØ[[˜Ý[ÛˆØ]™QÜ˜\XÜÊÊBŠÈØØ[ÞÞKÝËÚŠÈYˆË™Ù]ØÚ\ÜÛÜˆ[ˆÞÞKÝËÚHË™Ù]ØÚ\ÜÛÜŠ
+H[™ŠÈØØ[›[™[HH˜[H‹š[ŠÈYˆË™Ù]›[™[ÙH[ˆ›[™[HHË™Ù]›[™[ÙJ
+H[™ŠÈØØ[\Üš]BŠÈYˆË™Ù]\[ÙH[ˆ\Üš]HHË™Ù]\[ÙJ
+H[™ŠÈ™]\›ˆÂŠÈØ[˜\ÈHË™Ù]Ø[˜\È[™Ë™Ù]Ø[˜\Ê
+HÜˆš[ŠÈÚY\ˆHË™Ù]ÚY\ˆ[™Ë™Ù]ÚY\Š
+HÜˆš[ŠÈ›[™H›[™[HH[KŠÈ\H\Üš]HHÜš]KŠÈÛÛÜˆHË™Ù]ÛÛÜˆ[™ÈË™Ù]ÛÛÜŠ
+HHÜˆÈKKKHKŠÈØÚ\ÜÛÜˆHÞHš[[™ÈÞÞKÝËÚHÜˆ˜[ÙKŠÈBŠÙ[™ŠÂŠÛØØ[[˜Ý[Ûˆ™\ÝÜ™QÜ˜\XÜÊËÊBŠÈYˆËœÙ]Ø[˜\È[ˆËœÙ]Ø[˜\ÊË˜Ø[˜\ÊH[™ŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\ŠËœÚY\ŠH[™ŠÈYˆËœÙ]\[ÙH[‚ŠÈYˆË™\[ˆËœÙ]\[ÙJË™\ËÜš]JH[ÙHËœÙ]\[ÙJ
+H[™ŠÈ[™ŠÈYˆËœÙ]›[™[ÙH[ˆËœÙ]›[™[ÙJË˜›[™Üˆ˜[H‹Ë˜[JH[™ŠÈYˆËœÙ]ÛÛÜˆ[ˆËœÙ]ÛÛÜŠ[œXÚÊË˜ÛÛÜŠJH[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[‚ŠÈYˆËœØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ[œXÚÊËœØÚ\ÜÛÜŠJH[ÙHËœÙ]ØÚ\ÜÛÜŠ
+H[™ŠÈ[™ŠÙ[™ŠÂŠÛØØ[[˜Ý[Ûˆ™[ØØ]J™[™\™\‹˜]JBŠÈØØ[HXÙ[Y[
+™[™\™\‹˜]JBŠÈYˆ›Ý[ˆ™]\›ˆ˜[ÙH[™ŠÈØØ[ÛÜ›H™[™\™\‹ÛÜ›Ý™\œšYBŠÈØØ[ZHH™[™\™\‹˜Ø[˜\ÂŠÈYˆ›Ý
+ÛÜ›[™ZJH[ˆ™]\›ˆ˜[ÙH[™ŠÈØØ[[™[H[œÝ\™T[™[Ø[˜\Ê
+BŠÈYˆ›Ý[™[[ˆ™]\›ˆ˜[ÙH[™ŠÂŠÈØØ[ÝX›HHœ˜[YR\ÔÝX›J˜]JBŠÈKH™]™\ˆÚÝÈHØXÚY[™[œ›ÛHH™]š[Ý\ÈÜÛ™[Ø˜]K‚ŠÈYˆ›ÝÝX›H[™
+›Ý[™[˜[YÜˆØXÚY[™[^HH˜]K™[™[^JH[‚ŠÈ™]\›ˆ˜[ÙBŠÈ[™ŠÂŠÈØØ[ÈHÝ™K™Ü˜\XÜÂŠÈØØ[Ø]™YHØ]™QÜ˜\XÜÊÊBŠÈØØ[ÚË\œˆHØ[
+[˜Ý[ÛŠ
+BŠÈYˆÝX›H[‚ŠÈKHÛ˜\ÚÝÛ›HHÛX[‹[œÚZÙ[ˆ[™[ˆ]XÚÈœ˜[Y\È™]\ÙH\ÈØXÚBŠÈKHÛÈH]XÚYQÝ^\ÈØÚÙYÈH\ÚXØ[ØÜ™Y[‹‚ŠÈËœÙ]Ø[˜\Ê[™[
+BŠÈË˜ÛX\Š
+BŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\Š
+H[™ŠÈYˆËœÙ]\[ÙH[ˆËœÙ]\[ÙJ
+H[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ
+H[™ŠÈËœÙ]›[™[ÙJ˜[H‹œ™[][\YYŠBŠÈËœÙ]ÛÛÜŠKKKJBŠÈË™˜]ÊZK\œÛÝ\˜ÙV\œÛÝ\˜ÙVJBŠÈ[™[˜[YHYBŠÈØXÚY[™[^HH˜]K™[™[^BŠÈ[™ŠÂŠÈKH™[[Ý™HH˜]]™HÝÈÛÜH]H^XÝÜÚ][ÛˆÚYP˜]KœÚZÙ[Š
+BŠÈKH\ÙY\Èœ˜[YKˆHØXÚY]XÚY[™[]Ù[ˆÙ\È›Ý[Ý™K‚ŠÈËœÙ]Ø[˜\ÊZJBŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\Š
+H[™ŠÈYˆËœÙ]\[ÙH[ˆËœÙ]\[ÙJ
+H[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ
+H[™ŠÈËœÙ]›[™[ÙJœ™\XÙHŠBŠÈËœÙ]ÛÛÜŠ
+BŠÈËœ™XÝ[™ÛJ™š[‹˜ÛX\–˜ÛX\–KS‘SVWÕËS‘SVWÒ
+BŠÂŠÈKH™\Ù\™HÚYP˜]IÜÈ[\ØÜ™Y[ˆÚ]H›\ÚÝ™\ˆHÛX\™YÛÝ\˜ÙBŠÈKH™XÝ[™ÛNÈÝ\Ú\ÙH™[[Ýš[™ÈHÝÈQÛÝ[X]™H[ˆ[™›\ÚYÛK‚ŠÈØØ[žH˜]K™žŠÈYˆž[™
+Û[X™\Šž™›\ÚÜˆ
+HÜˆ
+HˆŠÈ[™
+
+Û[X™\Š˜]K™œ˜[YHÜˆ
+HÜˆ
+H	H
+Hˆ[‚ŠÈËœÙ]ÛÛÜŠKKKŽJBŠÈËœ™XÝ[™ÛJ™š[‹˜ÛX\–˜ÛX\–KS‘SVWÕËS‘SVWÒ
+BŠÈ[™ŠÂŠÈKHH›Þ[ÛÜ›Ý™\œšYH\ÈH\ØØ[OLH[\™\ÛÛ][ÛˆÝ\™˜XÙKÛÂŠÈKH™[™\™\‹™œ˜[YT™XÝÊ
+K•\\È\™XÝHHœ˜[YXY™™\‹\^[ØØ[H™YYYŠÈKH›ÜˆÛ™H˜]]™HÒQH^[‚ŠÈËœÙ]Ø[˜\ÊÛÜ›
+BŠÈYˆËœÙ]ÚY\ˆ[ˆËœÙ]ÚY\Š
+H[™ŠÈYˆËœÙ]\[ÙH[ˆËœÙ]\[ÙJ
+H[™ŠÈYˆËœÙ]ØÚ\ÜÛÜˆ[ˆËœÙ]ØÚ\ÜÛÜŠ
+H[™ŠÈËœÙ]›[™[ÙJ˜[H‹œ™[][\YYŠBŠÈËœÙ]ÛÛÜŠKKKJBŠÈË™˜]Ê[™[\™Ù]\™Ù]KœØØ[KœØØ[JBŠÈ[™
+BŠÈ™\ÝÜ™QÜ˜\XÜÊËØ]™Y
+BŠÂŠÈYˆ›ÝÚÈ[‚ŠÈØØ[ÙÈHˆ[™‹›ÙÂŠÈYˆÙÈ[™ÙËØ\›ˆ[‚ŠÈÙÎØ\›Š–ÑSPSTÔ×ÔÒTWH[™[^HQ™[ØØ][Ûˆ˜Z[Yˆ	\È‹ÜÝš[™Ê\œŠJBŠÈ[™ŠÈ™]\›ˆ˜[ÙBŠÈ[™ŠÈ™]\›ˆYBŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQš[œÝ[
+
+BŠÈØØ[™[™\™\ˆH™\]Z\™JœÜ˜Ëœ™[™\‹”™[™\™\ˆŠBŠÈYˆ™[™\™\‹™[™œ˜[YHOH[œÝ[Y[™œ˜[YH[ˆ™]\›ˆYH[™ŠÈYˆ›Ý™[™\™\‹™˜[X[\ÜÑ[™[^RYš[˜[˜\ÙH[‚ŠÈ™[™\™\‹™˜[X[\ÜÑ[™[^RYš[˜[˜\ÙHH™[™\™\‹™[™œ˜[YBŠÈ[™ŠÈØØ[˜\ÙHH™[™\™\‹™˜[X[\ÜÑ[™[^RYš[˜[˜\ÙBŠÈ[œÝ[Y[™œ˜[YHH[˜Ý[ÛŠ™[™\™\‹‹‹ŠBŠÈØØ[Ý]HH™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]BŠÈØØ[˜]HHÝ]H[™Ý]K˜˜]BŠÈYˆ˜]H[ˆ™[ØØ]J™[™\™\‹˜]JH[™ŠÈ™]\›ˆ˜\ÙJ™[™\™\‹‹‹ŠBŠÈ[™ŠÈ™[™\™\‹™[™œ˜[YHH[œÝ[Y[™œ˜[YBŠÈ™]\›ˆYBŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQ˜™YÚ[Š˜]JBŠÈQš[œÝ[
+
+BŠÈ[™[˜[YH˜[ÙBŠÈØXÚY[™[^HHš[ŠÈØØ[™[™\™\ˆH˜]H[™˜]K™Ø[YH[™˜]K™Ø[YKœ™[™\™\‚ŠÈYˆXÝ]™T™[™\™\ˆ[™XÝ]™T™[™\™\ˆH™[™\™\ˆ[‚ŠÈXÝ]™T™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]HHš[ŠÈ[™ŠÈXÝ]™T™[™\™\ˆH™[™\™\‚ŠÈYˆ™[™\™\ˆ[ˆ™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]HHÈ˜]HH˜]HH[™ŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQ™š[š\Ú
+
+BŠÈYˆXÝ]™T™[™\™\ˆ[ˆXÝ]™T™[™\™\‹™˜[X[\ÜÑ[™[^RYÝ]HHš[[™ŠÈXÝ]™T™[™\™\ˆHš[ŠÈ[™[˜[YH˜[ÙBŠÈØXÚY[™[^HHš[ŠÙ[™ŠÂŠÙ[˜Ý[ÛˆQš[˜[Y]J
+BŠÈYˆ[™[Ø[˜\È[™[™[Ø[˜\Ëœ™[X\ÙH[ˆØ[
+[™[Ø[˜\Ëœ™[X\ÙK[™[Ø[˜\ÊH[™ŠÈ[™[Ø[˜\ÈHš[ŠÈ[™[˜[YH˜[ÙBŠÈØXÚY[™[^HHš[ŠÙ[™ŠÂŠÜ™]\›ˆQ
