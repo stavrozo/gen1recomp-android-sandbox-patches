@@ -1,0 +1,50 @@
+--- a/main.lua
++++ b/main.lua
+@@ -288,10 +288,26 @@
+   if not battle then return false end
+   if battle.__crystalVoxel then return true end
+   local voxel = voxelMod()
+-  -- A malformed export (a bare value rather than the { lib = ... } table)
+-  -- must read as "not a voxel battle": the original wrapped this in a
+-  -- pcall, so keep that behaviour with a type gate instead.
+-  local lib = type(voxel) == "table" and voxel.lib
++  -- A malformed export (a bare value rather than a provider table) must read
++  -- as "not a voxel battle".
++  if type(voxel) ~= "table" then return false end
++
++  -- Dramaless Shape 2.x exposes its active standalone session directly.
++  -- When another mod hosts the same providers, the arena provider owns a live
++  -- overworld state for the duration of the voxel battle.
++  local host = voxel.voxel2DBattleHost
++  if host and host.session and host.session.battle == battle then
++    battle.__crystalVoxel = true
++    return true
++  end
++  local arenaProvider = voxel.voxelArenaProvider
++  if arenaProvider and arenaProvider.state then
++    battle.__crystalVoxel = true
++    return true
++  end
++
++  -- Legacy Dramatic Shape / voxel-fork contract.
++  local lib = voxel.lib
+   if not (lib and lib.require) then return false end
+   local okOB, OverworldBattle = pcall(lib.require, "OverworldBattle")
+   if not (okOB and OverworldBattle and OverworldBattle.battle) then
+@@ -2500,6 +2516,16 @@
+   BattleState.update = function(self, dt)
+     local result = originalUpdate(self, dt)
+ 
++    -- Dramaless 2.x can activate its voxel session after battle.started has
++    -- already initialized Crystal's frames. Rebuild once when that session
++    -- becomes live so both battlers use the staged-battle rendering path.
++    local staged = voxelContext(self)
++    if staged and not self.__crystalVoxelFramesReady then
++      self.__crystalVoxelFramesReady = true
++      resetEnemyAnimation(self)
++      resetPlayerAnimation(self)
++    end
++
+     if voxelPaper then markCrystalBattlers(self) end
+ 
+     -- Reset both battlers when the COLORS mode changes so the
