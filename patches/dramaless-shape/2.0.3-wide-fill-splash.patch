@@ -1,0 +1,268 @@
+diff --git a/lib/BattleCam.lua b/lib/BattleCam.lua
+index be07353..30781f2 100644
+--- a/lib/BattleCam.lua
++++ b/lib/BattleCam.lua
+@@ -90,14 +90,34 @@ BattleCam.RIGS = {
+     side = 41.98, back = 41.16, height = 28.48,
+     lookX = -3.24, lookY = -1.35, frameH = 55.62,
+   },
++
++  -- Gen1Recomp WIDE battle layout (304x144).  WideBattle keeps the same
++  -- native 160x144 animation coordinates, then translates the player field
++  -- by (+20,+8) and the enemy field by (+136,0).  These two rigs solve the
++  -- same arena cells against those translated feet/baseline anchors:
++  -- player (46,104), enemy (260,56).  Keeping this in the camera means the
++  -- cards remain attached to real arena ground instead of being screen-space
++  -- sprites pasted over the voxel scene.
++  tele_uiwide = {
++    side = 105.72, back = 92.84, height = 37.88,
++    lookX = -3.17, lookY = 0.34, frameH = 24.93,
++  },
++  wide_uiwide = {
++    side = 58.28, back = 37.29, height = 28.48,
++    lookX = -6.59, lookY = -1.35, frameH = 30.13,
++  },
+ }
+ 
+ BattleCam.DEFAULT_RIG = "tele"
+ 
+--- The rig an arena asks for, falling back to the default for anything that
+--- does not ask (and for a name that is not one of the two).
++-- The rig an arena asks for, falling back to the default.  uiWide is a
++-- presentation flag added by VoxelBattleArenaProvider when Gen1Recomp is
++-- drawing its 304x144 WIDE battle composition; it must not change CLASSIC.
+ function BattleCam.rigFor(arena)
+   local want = arena and arena.cam
++  if arena and arena.uiWide then
++    want = (want == "wide") and "wide_uiwide" or "tele_uiwide"
++  end
+   return BattleCam.RIGS[want] or BattleCam.RIGS[BattleCam.DEFAULT_RIG]
+ end
+ 
+diff --git a/lib/VoxelBattleArenaProvider.lua b/lib/VoxelBattleArenaProvider.lua
+index 6b95007..b5bb403 100644
+--- a/lib/VoxelBattleArenaProvider.lua
++++ b/lib/VoxelBattleArenaProvider.lua
+@@ -11,6 +11,15 @@ local function overworld()
+   return Game and Game.overworld
+ end
+ 
++local function wideBattleLayout(context)
++  local battle = context and context.battle
++  if not (battle and type(battle.isWideBattleLayout) == "function") then
++    return false
++  end
++  local ok, value = pcall(battle.isWideBattleLayout, battle)
++  return ok and value and true or false
++end
++
+ function Provider:available()
+   local state = overworld()
+   return state and state.map and state.player and V.require("Voxel3D").available()
+@@ -36,6 +45,13 @@ function Provider:arena(context)
+   if not Scene.ready(state, arena) then
+     return decline("voxel terrain is not ready")
+   end
++
++  -- The 304x144 WIDE layout translates the engine's battle slots while the
++  -- voxel cards stay pinned to arena ground.  Tag the arena before asking
++  -- BattleCam for its rig so both standalone Dramaless and StadiumBattleFX
++  -- receive the WIDE-aware solved camera.
++  arena.uiWide = wideBattleLayout(context)
++
+   -- Publish the same canonical rig original Dramaless solves this arena
+   -- against. SBFX reads this public arena field for its default camera, so
+   -- hosting the voxel stage does not silently substitute Stadium's taller,
+diff --git a/lib/VoxelBattleCardProvider.lua b/lib/VoxelBattleCardProvider.lua
+index 02af782..5d1a84c 100644
+--- a/lib/VoxelBattleCardProvider.lua
++++ b/lib/VoxelBattleCardProvider.lua
+@@ -40,10 +40,19 @@ local function voxelArena(context)
+   return type(id) == "string" and id:match("^dramaless:voxel%-map:") ~= nil
+ end
+ 
+-local function syncCamera(context)
++local function syncCamera(context, recenter)
+   if not voxelArena(context) then return end
+   local ok, camera = pcall(V.require, "BattleCam")
+-  if ok and camera then camera.steerable = not backPinned() end
++  if not (ok and camera) then return end
++
++  -- Native Gen 1 move animations and Poke Ball throws remain screen-space
++  -- effects at the engine's fixed battle anchors. The voxel cards only line
++  -- up with those effects when BattleCam uses the canonical solved shot.
++  -- Lock out drift/zoom/steering while these 2D cards are active instead of
++  -- letting the camera move the cards away from the effects that target them.
++  camera.steerable = false
++  camera.still = true
++  if recenter and type(camera.recentre) == "function" then camera.recentre() end
+ end
+ 
+ local function canvasFor(side)
+@@ -118,6 +127,44 @@ local function withNativePics(context, fn)
+   return ok, result
+ end
+ 
++local function battlerForSide(battle, side)
++  if not battle then return nil end
++  return side == "player" and battle.player or battle.enemy
++end
++
++-- Splash's SE_BOUNCE_UP_AND_DOWN is implemented by the engine as repeated
++-- tilemap Y displacement on the user's native battle picture. Baking that
++-- displacement into a 160x144 capture makes the card clip/wrap inside its
++-- texture before the texture is mounted in 3D. Keep the captured card stable
++-- and promote only this displacement to the billboard's world transform.
++local function bounceWorldOffset(battle, side)
++  local battler = battlerForSide(battle, side)
++  local pf = battler and battle.picFx and battle.picFx[battler]
++  if not (pf and pf.kind == "bounce") then return 0 end
++  local t = tonumber(pf.t) or 0
++  -- The native effect slides the 2D tilemap downward and resets it five
++  -- times. In world space that would push the billboard through the floor.
++  -- Preserve the stepped timing as a small above-ground hop instead:
++  --   0, 8, 16, 24, 16, 8, 0 pixels over each 21-frame pass.
++  local phase = math.floor((t % 21) / 3)
++  local step = phase <= 3 and phase or (6 - phase)
++  return step * 8 * WORLD_PER_PIC_PIXEL
++end
++
++local function withoutCapturedBounce(battle, side, fn)
++  local battler = battlerForSide(battle, side)
++  local pf = battler and battle.picFx and battle.picFx[battler]
++  if not (pf and pf.kind == "bounce") then return fn() end
++
++  local kind, t = pf.kind, pf.t
++  pf.kind = nil
++  local results = { pcall(fn) }
++  pf.kind, pf.t = kind, t
++  if not results[1] then error(results[2], 0) end
++  table.remove(results, 1)
++  return unpack(results)
++end
++
+ local function captureSide(context, side)
+   local battle = context and context.battle
+   if side == "player" and backPinned() then
+@@ -156,7 +203,9 @@ local function captureSide(context, side)
+     g.setColor(1, 1, 1, 1)
+     if g.setScissor then g.setScissor() end
+     withOriginalPlacement(function()
+-      battle:drawPicsLayer(0, 0, 0, side, true)
++      withoutCapturedBounce(battle, side, function()
++        battle:drawPicsLayer(0, 0, 0, side, true)
++      end)
+     end)
+   end)
+ 
+@@ -182,7 +231,10 @@ local function captureSide(context, side)
+   elseif side == "player" and battle.showPlayerBack and battle.playerBackPic then
+     trainer = true
+   end
+-  textures[side] = { canvas = canvas, ax = ax, ay = ay, trainer = trainer }
++  textures[side] = {
++    canvas = canvas, ax = ax, ay = ay, trainer = trainer,
++    worldYOffset = bounceWorldOffset(battle, side),
++  }
+   return true
+ end
+ 
+@@ -204,7 +256,7 @@ local function drawSide(context, side)
+     return false
+   end
+ 
+-  local ground = tonumber(context.groundY) or 0
++  local ground = (tonumber(context.groundY) or 0) + (card.worldYOffset or 0)
+   local fx, fy = project(cell[1], ground, cell[2])
+   local tx, ty = project(cell[1], ground + WORLD_CARD_HEIGHT, cell[2])
+   if not (fx and fy and tx and ty) then return false end
+@@ -226,7 +278,7 @@ local function drawVoxelSide(context, side)
+   local mesh = Billboard.mesh()
+   if not mesh then return false end
+   local model = Billboard.matrix(card.canvas, card.ax, card.ay,
+-    cell[1], tonumber(context.groundY) or 0, cell[2],
++    cell[1], (tonumber(context.groundY) or 0) + (card.worldYOffset or 0), cell[2],
+     side == "player" and not card.trainer)
+   Voxel3D.seams(false)
+   Voxel3D.glass(false)
+@@ -269,12 +321,12 @@ function Provider:begin(context, arena)
+   visible.player, visible.enemy = false, false
+   drawn.player, drawn.enemy = false, false
+   capture(context)
+-  syncCamera(context)
++  syncCamera(context, true)
+   return true
+ end
+ 
+ function Provider:update(context)
+-  syncCamera(context)
++  syncCamera(context, false)
+   capture(context)
+ end
+ 
+@@ -321,8 +373,13 @@ function Provider:footprint(context, side)
+            radius = 8, height = WORLD_CARD_HEIGHT }
+ end
+ 
+-function Provider:cameraLocked()
+-  return backPinned()
++function Provider:cameraLocked(context)
++  -- StadiumBattleFX owns the host camera when it is installed.  Our local
++  -- BattleCam lock above cannot affect that camera, so explicitly ask the
++  -- host to keep Dramaless' authored base shot while native 2D cards are
++  -- staged on the voxel arena.  That base shot is solved against the same
++  -- fixed Gen 1 move/Poke Ball anchors as the captured cards.
++  return backPinned() or (active and voxelArena(context))
+ end
+ 
+ function Provider:finish()
+@@ -331,7 +388,10 @@ function Provider:finish()
+   visible.player, visible.enemy = false, false
+   drawn.player, drawn.enemy = false, false
+   local ok, camera = pcall(V.require, "BattleCam")
+-  if ok and camera then camera.steerable = true end
++  if ok and camera then
++    camera.steerable = true
++    camera.still = false
++  end
+ end
+ 
+ function Provider:invalidate()
+diff --git a/lib/VoxelBattleScene.lua b/lib/VoxelBattleScene.lua
+index 4b7fd07..e9c5635 100644
+--- a/lib/VoxelBattleScene.lua
++++ b/lib/VoxelBattleScene.lua
+@@ -37,6 +37,24 @@ local function fitScale()
+   return math.max(1, math.floor(math.min(w / GB_W, h / GB_H)))
+ end
+ 
++-- WIDE battles may be presented with BATTLE SIZE = FILL.  In that mode
++-- Gen1Recomp scales the 304x144 battle surface by a fractional Up value
++-- (Renderer:frameRects), while fitScale() deliberately stays integer.  The
++-- voxel camera has to use the same presentation scale as the native battle
++-- layer or the world cards are pulled inward relative to move/Poke Ball FX.
++-- Classic battles keep the established integer path unchanged.
++local function presentationScale(arena)
++  if arena and arena.uiWide then
++    local ok, Renderer = pcall(require, "src.render.Renderer")
++    if ok and Renderer and type(Renderer.frameRects) == "function" then
++      local okRects, rects = pcall(Renderer.frameRects, Renderer)
++      local scale = okRects and type(rects) == "table" and tonumber(rects.Up)
++      if scale and scale > 0 then return scale end
++    end
++  end
++  return fitScale()
++end
++
+ local function windowCamera(camera, ph, scale)
+   if not camera then return nil end
+   local out = {}
+@@ -148,7 +166,7 @@ function Scene.render(state, arena, drawActors, hostCamera)
+   local camera = hostCamera and hostCamera.pose
+   local pitch = hostCamera and hostCamera.pitch
+   if not camera then camera, pitch = BattleCam.rig(arena, groundY) end
+-  camera = windowCamera(camera, ph, fitScale())
++  camera = windowCamera(camera, ph, presentationScale(arena))
+   local cx, cy = arena.mid[1], arena.mid[2]
+   local vh = frameHeight(camera, BattleCam.frameH(arena))
+   local vw = vh * pw / ph
