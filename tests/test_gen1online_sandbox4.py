@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,9 @@ PATCH = ROOT / "patches" / "gen1online-gamecorner" / "evolution-stack.patch"
 
 
 def load_upgrader():
+    scripts_dir = str(ROOT / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
     spec = importlib.util.spec_from_file_location("upgrade_gen1online_sandbox1", SCRIPT)
     if spec is None or spec.loader is None:
         raise AssertionError("could not load Gen1Online sandbox.4 upgrader")
