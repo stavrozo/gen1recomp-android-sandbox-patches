@@ -1,0 +1,88 @@
+--- a/main.lua
++++ b/main.lua
+@@ -25,6 +25,7 @@
+   local Font = require("src.render.Font")
+   local Menu = require("src.ui.Menu")
+   local TextBox = require("src.render.TextBox")
++  local EvolutionState = require("src.ui.EvolutionState")
+   local Net = require("src.link.Net")
+   local CodeEntry = require("src.link.CodeEntry")
+   local NPC = require("src.world.NPC")
+@@ -88,6 +89,7 @@
+   local localFavoriteMon = "CHARIZARD"
+   local mmoLevel = 1
+   local mmoXp = 0
++  local pendingMmoLevelUp = nil
+   local mmoToken = nil
+   local localSelectedSprite = "SPRITE_RED"
+ 
+@@ -394,6 +396,30 @@
+     return table.concat(pages, "\f")
+   end
+ 
++  -- Evolution.apply emits pokemon.evolved while EvolutionState is still on
++  -- the stack. Pushing an MMO level-up TextBox from that event inserts it
++  -- between EvolutionState and Gen1Recomp's own result TextBox, so the
++  -- engine later pops the wrong state and exposes the stale "is evolving"
++  -- screen. Defer only that notification until the evolution state is gone.
++  local function evolutionStateActive(game)
++    local states = game and game.stack and game.stack.states
++    if type(states) ~= "table" then return false end
++    for i = 1, #states do
++      if getmetatable(states[i]) == EvolutionState then
++        return true
++      end
++    end
++    return false
++  end
++
++  local function showMmoLevelUp(game, level)
++    if not game or not game.stack then return end
++    local Sound = require("src.core.Sound")
++    pcall(function() Sound.play(game.data, "Level_Up") end)
++    game.stack:push(TextBox.new(game,
++      wrapText(string.format("LEVEL UP!\nREACHED MMO LEVEL %d!", level))))
++  end
++
+   -- Helper to list all Gen 1 Pokémon species sorted alphabetically
+   local function getAllGen1Species(data)
+     local speciesList = {}
+@@ -1034,9 +1060,11 @@
+       gtsApiPost(payload, 1.5)
+ 
+       if mmoLevel > oldLevel then
+-        local Sound = require("src.core.Sound")
+-        pcall(function() Sound.play(game.data, "Level_Up") end)
+-        game.stack:push(TextBox.new(game, wrapText(string.format("LEVEL UP!\nREACHED MMO LEVEL %d!", mmoLevel))))
++        if evolutionStateActive(game) then
++          pendingMmoLevelUp = math.max(pendingMmoLevelUp or 0, mmoLevel)
++        else
++          showMmoLevelUp(game, mmoLevel)
++        end
+       end
+     end
+   end
+@@ -3462,6 +3490,12 @@
+   mod.hooks:wrap("core.game.update", function(nextFn, game, dt)
+     if nextFn then nextFn(game, dt) end
+ 
++    if pendingMmoLevelUp and not evolutionStateActive(game) then
++      local level = pendingMmoLevelUp
++      pendingMmoLevelUp = nil
++      showMmoLevelUp(game, level)
++    end
++
+     -- Continuous frame service for background thread battle messages
+     processGlobalThreadMessages(game)
+ 
+--- a/manifest.json
++++ b/manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "id": "gen1online-gamecorner",
+   "name": "Gen 1 Online - Game Corner Edition",
+-  "version": "0.3.4.3-sandbox.1",
++  "version": "0.3.4.3-sandbox.4",
+   "entry": "main.lua",
+   "author": "Gamecorner33, martin2844 (Original Blackjack Mod Creator), and Antigravity",
+   "description": "Integrated Gen 1 Online MMO, 24/7 GTS Trading, PVP Battles, Casino Lounge, and Live Multiplayer Online Texas Hold'em. Android sandbox compatibility patch.",
