@@ -19,6 +19,7 @@ Two upstream releases now supersede parts of this repository:
 Other important notes:
 
 - `love.thread` is **still not available to mods**, so the Gen1Online/Game Corner compatibility rewrite remains relevant for the exact older build tested here.
+- Gen1Online `sandbox.4` also includes a device-verified fix for the Rare Candy evolution stack bug caused by an MMO level-up textbox being pushed during `pokemon.evolved`.
 - The Dramaless Shape Voxel render-distance fix is a separate rendering bug and is unrelated to the legacy compatibility layer.
 - If an original mod author releases an official updated version, prefer the upstream release.
 
@@ -29,7 +30,7 @@ Other important notes:
 | [Crystal Animated Sprites](patches/crystal-animated-sprites/) | 1.6 | Legacy compat may allow the original to load; patch performs the proper migration | [patch](patches/crystal-animated-sprites/android-sandbox.patch) |
 | [Wilds of Kanto](patches/wilds-of-kanto/) | 2.1.0 | **Archived:** superseded by official Wilds 2.1.5 | [historical exact patch](patches/wilds-of-kanto/android-sandbox.patch.gz) |
 | [Shiny Pokémon](patches/shiny-pokemon/) | 1.0.1 | Legacy compat may allow the original to load; patch removes the old filesystem dependency | [exact compressed patch](patches/shiny-pokemon/android-sandbox.patch.gz) |
-| [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | `love.thread` rewrite still relevant for this tested build; live online behavior experimental | [exact compressed patch](patches/gen1online-gamecorner/android-sandbox.patch.gz) |
+| [Gen1Online / Game Corner](patches/gen1online-gamecorner/) | 0.3.4.3 | `love.thread` rewrite remains relevant; **sandbox.4 evolution fix verified on Android with the full mod setup**; live online behavior experimental | [compat patch + sandbox.4 overlay](patches/gen1online-gamecorner/) |
 | [Dramaless Shape](patches/dramaless-shape/) | 2.0.1 | **Render bug still exists upstream in 2.0.2.** Packaging is fixed upstream; existing patch targets 2.0.1 only | [2.0.1 patch](patches/dramaless-shape/android-sandbox.patch) |
 
 The larger/exact diffs may be stored as `.patch.gz` to keep the repository compact. The patcher reads them directly; users do not need to decompress them.
@@ -58,6 +59,12 @@ DRAMALESS_SHAPE-2.0.1-sandbox.2-android-import-fix.zip
 
 Your original ZIP is never modified.
 
+For Gen1Online v0.3.4.3, the normal patcher first creates the verified `sandbox.1` compatibility package. Upgrade that exact package to the device-tested `sandbox.4` evolution fix with:
+
+```bash
+python scripts/upgrade_gen1online_sandbox1.py Gen1Online-GameCorner-v0.3.4.3-sandbox.1-android-patch.zip
+```
+
 > [!NOTE]
 > Do **not** apply the 2.0.1 Dramaless patch to upstream 2.0.2. The 2.0.2 release already fixes packaging, but still contains the render-distance coordinate bug. Until that is fixed upstream, setting Dramaless render distance to `FULL` avoids the faulty culling path.
 
@@ -79,9 +86,13 @@ This patch removes the old filesystem dependency while retaining shiny DV genera
 
 ### Gen1Online / Game Corner Edition v0.3.4.3
 
-This compatibility patch removes direct `love.thread` and blocked filesystem dependencies from the build we tested. `love.thread` remains explicitly unsupported in Gen1Recomp 0.1.91, so this is not covered by the new legacy compatibility layer.
+The base compatibility patch removes direct `love.thread` and blocked filesystem dependencies from the build we tested. `love.thread` remains explicitly unsupported in Gen1Recomp 0.1.91, so this is not covered by the legacy compatibility layer.
 
-The mod loads under the newer sandbox, but the live online/network behavior should still be treated as **experimental** until independently exercised end-to-end.
+A second Android issue was then isolated with Gen1Online alone: when a Rare Candy evolution also raised the Gen1Online MMO level, the mod synchronously pushed its own MMO level-up `TextBox` from `pokemon.evolved` while Gen1Recomp's `EvolutionState` was still on the stack. That inserted an unexpected state between the evolution state and Gen1Recomp's result textbox. When the result closed, the wrong state was popped and the stale `What? ... is evolving!` screen became visible again.
+
+`sandbox.4` queues the MMO level-up notification while `EvolutionState` is active and displays it after the evolution state has fully unwound. MMO XP, the level increase, and the notification are preserved. The final behavior was verified on Android first with Gen1Online alone and then with the complete 15-mod setup enabled.
+
+The live online/network behavior should still be treated as **experimental** until independently exercised end-to-end.
 
 ### Dramaless Shape v2.0.1 / upstream 2.0.2 status
 
@@ -115,7 +126,9 @@ See [NOTICE.md](NOTICE.md) for attribution and scope details.
 
 ## Tested combination
 
-The fixes were developed against a Gen1Recomp Android setup where Crystal Animated Sprites, Wilds of Kanto, Shiny Pokémon, and Dramaless Shape were tested in-game after the sandbox/runtime change. Gen1Online's sandbox/load issue was fixed, but its live network path remains marked experimental.
+The fixes were developed against a Gen1Recomp Android setup where Crystal Animated Sprites, Wilds of Kanto, Shiny Pokémon, and Dramaless Shape were tested in-game after the sandbox/runtime change.
+
+Gen1Online `sandbox.4` was verified for the Rare Candy evolution flow both by itself and with the complete 15-mod Android setup enabled. Its live PvP/GTS/Game Corner networking path remains marked experimental until exercised separately.
 
 Wilds 2.1.5 is now the recommended upstream Wilds release. Dramaless 2.0.2 fixes the importer/package issue but still has the render-distance culling bug documented above.
 
