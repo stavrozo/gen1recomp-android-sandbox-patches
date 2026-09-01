@@ -1,0 +1,41 @@
+--- a/main.lua
++++ b/main.lua
+@@ -912,15 +912,17 @@
+   -- Forced Game Save helper (Captures live overworld coordinates & routes to save_online.lua or save.lua)
+   performForcedSave = function(game)
+     if not game or not game.save then return end
++    if not isGtsServerConnected then
++      -- Do not force ordinary offline saves from event callbacks. In
++      -- particular, pokemon.evolved fires while the evolution UI stack is
++      -- still active; saving there can snapshot transient evolution state.
++      return
++    end
+     if game.overworld and game.overworld.captureSave then
+       pcall(function() game.overworld:captureSave(game.save) end)
+     end
+-    if isGtsServerConnected then
+-      saveOnlineAccount(game.save)
+-      writeOnlineSave(game.save)
+-    elseif game.writeSave then
+-      pcall(function() game:writeSave() end)
+-    end
++    saveOnlineAccount(game.save)
++    writeOnlineSave(game.save)
+   end
+ 
+   -- Sync Local Trainer Profile & Online Account to Server
+--- a/manifest.json
++++ b/manifest.json
+@@ -1,10 +1,10 @@
+ {
+   "id": "gen1online-gamecorner",
+   "name": "Gen 1 Online - Game Corner Edition",
+-  "version": "0.3.4.3-sandbox.1",
++  "version": "0.3.4.3-sandbox.2",
+   "entry": "main.lua",
+   "author": "Gamecorner33, martin2844 (Original Blackjack Mod Creator), and Antigravity",
+-  "description": "Integrated Gen 1 Online MMO, 24/7 GTS Trading, PVP Battles, Casino Lounge, and Live Multiplayer Online Texas Hold'em. Android sandbox compatibility patch.",
++  "description": "Integrated Gen 1 Online MMO, 24/7 GTS Trading, PVP Battles, Casino Lounge, and Live Multiplayer Online Texas Hold'em. Android sandbox compatibility patch with offline evolution save fix.",
+   "category": "CONTENT",
+   "assets_transforms": "transforms.lua",
+   "permissions": [
